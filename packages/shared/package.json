@@ -1,0 +1,17 @@
+{
+  "name": "@ghar/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chains, addresses and types shared by the Ghar agent, web app and sponsor integrations.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "viem": "^2.57.16"
+  }
+}
