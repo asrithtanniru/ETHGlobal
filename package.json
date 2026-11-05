@@ -1,0 +1,23 @@
+{
+  "name": "ghar",
+  "private": true,
+  "description": "Pay family bills back home from stablecoins, only to accounts a licensed provider verified.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.10"
+  },
+  "workspaces": [
+    "contracts",
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3"
+  }
+}
