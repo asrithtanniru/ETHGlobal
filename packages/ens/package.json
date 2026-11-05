@@ -14,7 +14,8 @@
     "check": "node scripts/check.ts",
     "setup": "node --env-file=../../contracts/.env scripts/setup.ts",
     "set-payee": "node --env-file=../../contracts/.env scripts/set-payee.ts",
-    "read": "node scripts/read.ts"
+    "read": "node scripts/read.ts",
+    "add-to-vault": "node --env-file=../../contracts/.env scripts/add-to-vault.ts"
   },
   "dependencies": {
     "@ghar/shared": "*",
