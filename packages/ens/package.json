@@ -1,0 +1,19 @@
+{
+  "name": "@ghar/ens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Verified payee book on ENSv2: dynamic tag.family.eth names and bill-match guard.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.json --outDir dist --noEmit false && node --test dist/test/*.test.js",
+    "check": "tsc -p tsconfig.json --outDir dist --noEmit false && node dist/scripts/check.js"
+  },
+  "dependencies": {
+    "viem": "^2.57.16"
+  }
+}
