@@ -7,6 +7,13 @@ export const USDT = {
   symbol: "USDT",
 } as const satisfies { address: Address; decimals: number; symbol: string };
 
+/** MockUSDC on Ethereum Sepolia. Free: `mint(to, amount)` has no access control. */
+export const MOCK_USDC_SEPOLIA = {
+  address: "0x240b0316df57887dbbe58b586508b19e633a14aa",
+  decimals: 6,
+  symbol: "mUSDC",
+} as const satisfies { address: Address; decimals: number; symbol: string };
+
 /** ENSv2 deployment on Ethereum Sepolia, from docs.ens.domains/learn/deployments. */
 export const ENS_V2_SEPOLIA = {
   rootRegistry: "0xb458d6a3a77919449d03e7a6903c26827c1ec43f",
