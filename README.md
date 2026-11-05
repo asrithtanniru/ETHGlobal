@@ -59,6 +59,7 @@ npm run deploy:sepolia -w @ghar/contracts
 | Whitechain Sepolia RPC | `https://rpc.testnet.whitechain.io` |
 | Whitechain explorer | https://explorer.testnet.whitechain.io |
 | Test USDT (6 decimals) | `0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7` |
+| GharVault | [`0xe5AF8E81fe481bF15642f75BE929016411c41825`](https://explorer.testnet.whitechain.io/address/0xe5AF8E81fe481bF15642f75BE929016411c41825) |
 | Arkiv Rabdi RPC | `https://rpc.rabdi.db-chain.testnet.arkiv.network` |
 | ENSv2 Sepolia deployment | https://docs.ens.domains/learn/deployments |
 
