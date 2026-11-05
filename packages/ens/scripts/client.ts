@@ -9,7 +9,6 @@ export const ROLE_SET_TEXT = 1n << 4n;
 
 export const resolverAbi = parseAbi([
   "function initialize((address account, uint256 roleBitmap)[] grants, bytes[] calls)",
-  "function setText(bytes name, string key, string value)",
   "function hasRootRoles(uint256 roleBitmap, address account) view returns (bool)",
 ]);
 

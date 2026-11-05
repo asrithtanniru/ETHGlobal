@@ -2,14 +2,19 @@
   "name": "@ghar/ens",
   "version": "0.1.0",
   "private": true,
-  "description": "Scripts for the ENSv2 payee book on Ethereum Sepolia.",
+  "description": "Verified payee book on ENSv2: dynamic tag.family.eth names, bill-match guard and setup scripts.",
   "license": "MIT",
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
-    "setup": "node --env-file=../../contracts/.env src/setup.ts",
-    "set-payee": "node --env-file=../../contracts/.env src/set-payee.ts",
-    "read": "node src/read.ts",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test test/*.test.ts",
+    "check": "node scripts/check.ts",
+    "setup": "node --env-file=../../contracts/.env scripts/setup.ts",
+    "set-payee": "node --env-file=../../contracts/.env scripts/set-payee.ts",
+    "read": "node scripts/read.ts"
   },
   "dependencies": {
     "@ghar/shared": "*",
