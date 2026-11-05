@@ -1,0 +1,18 @@
+{
+  "name": "@ghar/ens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Scripts for the ENSv2 payee book on Ethereum Sepolia.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "setup": "node --env-file=../../contracts/.env src/setup.ts",
+    "set-payee": "node --env-file=../../contracts/.env src/set-payee.ts",
+    "read": "node src/read.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ghar/shared": "*",
+    "viem": "^2.57.16"
+  }
+}
