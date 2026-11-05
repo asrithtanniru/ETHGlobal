@@ -1,0 +1,18 @@
+{
+  "name": "@ghar/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ghar vault contracts on Whitechain.",
+  "license": "MIT",
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test -vv",
+    "deploy:sepolia": "forge script script/Deploy.s.sol --rpc-url whitechain_sepolia --broadcast --verify --verifier blockscout --verifier-url https://explorer.testnet.whitechain.io/api/"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "5.6.1"
+  },
+  "devDependencies": {
+    "forge-std": "github:foundry-rs/forge-std#v1.17.0"
+  }
+}
