@@ -10,6 +10,9 @@ export const USDT = {
 /** GharVault on Whitechain Sepolia. */
 export const GHAR_VAULT = "0xA855E5b5152F7C7c824dc5c8EF034696a65587Ae" as const satisfies Address;
 
+/** Block GharVault was deployed in. Event queries start here. */
+export const GHAR_VAULT_DEPLOY_BLOCK = 12_351_281n;
+
 /** ENSv2 deployment on Ethereum Sepolia, from docs.ens.domains/learn/deployments. */
 export const ENS_V2_SEPOLIA = {
   rootRegistry: "0xb458d6a3a77919449d03e7a6903c26827c1ec43f",

@@ -1,5 +1,6 @@
 // Ghar agent: reads open bills from Arkiv for each payee, checks them against ENS and the vault,
-// then pays with pay(). Deterministic rules: the vault enforces the same limits on-chain anyway.
+// then pays with pay(). Deterministic rules decide what is payable; the vault enforces the same
+// limits on-chain. The AI review runs after them and can only hold a bill.
 import { BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, formatUnits, http, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { namehash } from "viem/ens";
@@ -7,6 +8,8 @@ import { ensChain, GHAR_VAULT, gharVaultAbi, PAYEE_BOOK_PARENT, settlementChain,
 import { buildPayeeName, getVerifiedPayee } from "@ghar/ens";
 import { arkivClient, checkBill, openBills, toVaultBill, type InboxBill } from "@ghar/arkiv";
 import { decide } from "./decide.ts";
+import { groqEndpoints, parseKeys } from "./llm.ts";
+import { llmReviewer, noReview, REVIEW_FAILED, reviewBill, vaultPastAmounts } from "./reviewer.ts";
 
 const env = (k: string) => process.env[k] || (() => { throw new Error(`${k} is not set`); })();
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
@@ -21,6 +24,10 @@ const ens = createPublicClient({ chain: ensChain, transport: http(process.env.SE
 const arkiv = arkivClient();
 const vault = { address: GHAR_VAULT, abi: gharVaultAbi } as const;
 const done = new Set<string>(); // digests already settled or refused for good this run
+const keys = parseKeys(process.env.GROQ_API_KEYS);
+const reviewer = keys.length ? llmReviewer({ endpoints: groqEndpoints(keys), pastAmounts: vaultPastAmounts(chain, sender) }) : noReview;
+// Invoice refs the sender checked by hand after a hold. Every other rule still applies to them.
+const approved = new Set(parseKeys(process.env.APPROVED_INVOICES));
 
 const read = (functionName: never, args: never) => chain.readContract({ ...vault, functionName, args }) as Promise<unknown>;
 
@@ -56,13 +63,26 @@ async function tick() {
         read("availableToAgent" as never, [sender, account.address] as never),
       ]) as [Address, bigint, bigint, bigint];
       const d = decide(bill, await checkBill(bill, payee), payee.biller, { biller, balance, availableToPayee, availableToAgent });
-      if (d.pay) await payBill(bill);
-      else log(`hold ${bill.invoiceRef}: ${d.reason}`);
+      if (!d.pay) {
+        log(`hold ${bill.invoiceRef}: ${d.reason}`);
+        continue;
+      }
+      if (!approved.has(bill.invoiceRef)) {
+        const verdict = await reviewBill(reviewer, bill);
+        if (verdict.hold) {
+          log(`hold ${bill.invoiceRef}: ${verdict.reason}`);
+          // A model hold stands until the sender acts. A failed review is retried next tick.
+          if (verdict.reason !== REVIEW_FAILED) done.add(bill.digest);
+          continue;
+        }
+      }
+      await payBill(bill);
     }
   }
 }
 
 log(`agent ${account.address} paying for ${sender}: ${tags.join(", ")}`);
+log(keys.length ? `AI review on, ${keys.length} Groq key(s)` : "AI review OFF: GROQ_API_KEYS is not set");
 for (;;) {
   await tick().catch((e) => log("tick failed:", (e as Error).message.split("\n")[0]));
   await new Promise((r) => setTimeout(r, Number(process.env.POLL_SECONDS ?? 30) * 1000));
