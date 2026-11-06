@@ -321,6 +321,61 @@ img { display: block; max-width: 100%; }
 .page-head .body-l { margin-top: 2rem; max-width: 64rem; }
 .panel { padding: 4.8rem var(--pad); background: var(--dash-x) top / 100% 1px no-repeat; }
 
+/* receipt printer: the slip feeds out of the slot in steps, one line at a time */
+.printer { --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .6 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  position: relative; isolation: isolate; display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 46rem; margin: 0 auto;
+}
+.printer__machine {
+  position: relative; isolation: isolate; width: 100%; overflow: hidden; padding: 1.2rem 1.2rem 3.2rem; border: 1px solid var(--ink); border-radius: 2.4rem; background: #2c2b28; color: var(--paper);
+  box-shadow: 0 2rem 3.6rem -2rem rgb(14 13 11 / 0.55), 0 0.6rem 1.4rem -0.8rem rgb(14 13 11 / 0.24), inset 0 1px 0 rgb(244 243 239 / 0.14), inset 0 -1px 0 rgb(14 13 11 / 0.55);
+}
+.printer__machine::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--noise); opacity: 0.3; pointer-events: none; }
+.printer__header { display: flex; justify-content: space-between; align-items: flex-start; height: 4.4rem; padding: 0.4rem 0.8rem; }
+.printer__header .logo { gap: 0.8rem; color: inherit; }
+.printer__header .logo__mark { width: 2rem; height: 2rem; }
+.printer__header .logo__word { font-size: 2rem; }
+.printer__header .mono { font-size: 1.2rem; color: var(--ink-3); }
+.printer__screen { display: grid; gap: 1.6rem; padding: 1.6rem; border-radius: 1.2rem; background: var(--ink); font-size: 1.5rem; line-height: 1.3; box-shadow: inset 0 0 2.4rem 0.4rem rgb(0 0 0 / 0.5); }
+.printer__bill { display: flex; justify-content: space-between; gap: 1.6rem; min-height: 4rem; }
+.printer__bill > div { min-width: 0; }
+.printer__bill p { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.printer__bill strong { flex: none; font-weight: 500; }
+.printer__detail { color: var(--ink-3); }
+.printer__status { display: flex; align-items: center; gap: 0.8rem; min-height: 1.8rem; font-size: 1.2rem; font-weight: 500; line-height: 1; color: var(--ink-3); }
+.printer__label { display: block; animation: appear 0.18s var(--ease-out); }
+.printer__spinner { width: 1.4rem; height: 1.4rem; margin: 0.2rem; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: printer-spin 0.8s linear infinite; }
+.printer__done { width: 1.8rem; height: 1.8rem; color: var(--paper); animation: appear 0.16s var(--ease-out); }
+.printer__slot { position: absolute; left: 2.4rem; right: 2.4rem; bottom: 1.2rem; height: 0.8rem; border-radius: 0.4rem; background: var(--ink); box-shadow: inset 0 1px 2px #000; }
+.printer__output { position: relative; z-index: 1; width: calc(80% + 4.8rem); max-width: 100%; margin-top: -1.6rem; padding: 0 2.4rem 2.4rem; overflow: hidden; }
+.printer:not([data-stage="processing"]) .printer__output::before { content: ""; position: absolute; left: 2.4rem; right: 2.4rem; top: -0.4rem; z-index: 2; height: 0.8rem; background: rgb(14 13 11 / 0.75); filter: blur(6px); pointer-events: none; }
+.printer__feed { position: relative; filter: drop-shadow(0 0.8rem 1.2rem rgb(14 13 11 / 0.16)); }
+.printer[data-stage="processing"] .printer__feed { opacity: 0; transform: translateY(calc(-100% + 2px)); }
+.printer[data-stage="printing"] .printer__feed { animation: printer-feed 1.75s linear both; }
+.printer__paper { min-height: 32rem; padding: 2.8rem 2.4rem 3.2rem; background: var(--noise) var(--surface); background-blend-mode: soft-light; color: var(--ink); font-family: var(--mono); font-size: 1.3rem; line-height: 1.4; }
+.slip__head { display: flex; justify-content: space-between; padding-bottom: 1.6rem; background: var(--dash-x) bottom / 100% 1px no-repeat; }
+.slip__head span:last-child { color: var(--ink-2); }
+.slip__rows { display: grid; gap: 0.8rem; padding: 1.6rem 0; background: var(--dash-x) bottom / 100% 1px no-repeat; }
+.slip__rows > div { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1.2rem; }
+.slip__rows dt { color: var(--ink-2); }
+.slip__rows dd { text-align: right; overflow-wrap: anywhere; }
+.slip__total { display: flex; justify-content: space-between; align-items: baseline; gap: 1.2rem; padding: 1.6rem 0 2.4rem; font-size: 1.6rem; }
+.slip__total strong { font-weight: 500; }
+.printer__paper .link { font-size: 1.3rem; white-space: normal; }
+@keyframes printer-spin { to { transform: rotate(1turn); } }
+@keyframes printer-feed {
+  0% { transform: translateY(calc(-100% + 2px)); }
+  7.5%, 10.5% { transform: translateY(-91%); }
+  18%, 21% { transform: translateY(-81%); }
+  28.5%, 31.5% { transform: translateY(-70%); }
+  39%, 42% { transform: translateY(-58%); }
+  49.5%, 52.5% { transform: translateY(-45%); }
+  60%, 63% { transform: translateY(-32%); }
+  70.5%, 73.5% { transform: translateY(-20%); }
+  81%, 84% { transform: translateY(-10%); }
+  91.5%, 94.5% { transform: translateY(-3%); }
+  100% { transform: translateY(0); }
+}
+
 /* ---------- signed-in app: fixed type scale, not the landing page's viewport-scaled one ---------- */
 html:has(.dash), html:has(.signin), html:has(.signin-wait) { font-size: 10px; }
 .dash, .signin { font-size: 1.4rem; line-height: 1.45; font-variant-numeric: tabular-nums; }
@@ -559,6 +614,7 @@ html:has(.dash), html:has(.signin), html:has(.signin-wait) { font-size: 10px; }
   .hdr__cta > .btn, [data-sticky] .sticky__in > :nth-child(4) > .btn { display: none; }
   .record__row { grid-template-columns: 3.6rem 8.4rem minmax(0, 1fr); }
   .record__head, .record__foot { padding: 0 1.6rem; }
+  .printer__paper { padding-inline: 1.6rem; }
   .record__head .mono:last-child { display: none; }
 }
 
