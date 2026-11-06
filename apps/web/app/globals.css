@@ -248,7 +248,7 @@ img { display: block; max-width: 100%; }
 .stat-row .body-l { margin-top: 0.2rem; }
 .guard .caps { margin-top: 3.4rem; }
 .guard__art { position: relative; }
-.guard__art img { position: absolute; left: 50%; top: 31.6rem; width: 70.5rem; max-width: 92%; translate: -50% 0; }
+.guard__art img { position: absolute; left: 50%; top: 31.6rem; width: 70.5rem; max-width: 92%; height: auto; translate: -50% 0; }
 
 /* ---------- networks (customers) ---------- */
 .net { display: grid; grid-template-columns: 1fr 3fr; min-height: 70.2rem; }
@@ -366,8 +366,8 @@ html:has(.dash), html:has(.signin), html:has(.signin-wait) { font-size: 10px; }
 .duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.6rem; align-items: start; }
 .work { display: grid; grid-template-columns: minmax(0, 1fr) 40rem; gap: 1.6rem; align-items: start; }
 .work__rail { grid-column: 2; grid-row: 1; position: sticky; top: 2.4rem; }
-.overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(30rem, 0.85fr); gap: 1.6rem; align-items: start; }
-.overview__rail { display: grid; gap: 1.6rem; }
+.overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(30rem, 0.85fr); gap: 1.6rem; }
+.overview__rail { display: grid; gap: 1.6rem; align-content: start; }
 
 .card { min-width: 0; padding: 2rem 2.2rem; background: var(--surface); border: 1px solid var(--line); }
 .card__h { font-size: 1.6rem; line-height: 1.3; font-weight: 550; overflow-wrap: anywhere; }
@@ -382,13 +382,13 @@ html:has(.dash), html:has(.signin), html:has(.signin-wait) { font-size: 10px; }
 .next li:first-child a { border-top: 0; }
 .next a:hover { color: var(--ink); }
 
-.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--line); }
-.stats > div { padding: 2rem 2.2rem; min-width: 0; }
-.stats > div + div { border-left: 1px solid var(--line); }
-.stats__k { font-size: 1.3rem; color: var(--ink-2); }
-.stats .stat-n { margin-top: 0.8rem; font-size: 3.6rem; }
-.stats .stat-n small { font-size: 1.5rem; color: var(--ink-2); margin-left: 0.6rem; }
-.stats__note { margin-top: 0.6rem; font-size: 1.3rem; color: var(--ink-2); }
+.balances { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--line); }
+.balances > div { padding: 2rem 2.2rem; min-width: 0; }
+.balances > div + div { border-left: 1px solid var(--line); }
+.balances__k { font-size: 1.3rem; color: var(--ink-2); }
+.balances .stat-n { margin-top: 0.8rem; font-size: 3.6rem; }
+.balances .stat-n small { font-size: 1.5rem; color: var(--ink-2); margin-left: 0.6rem; }
+.balances__note { margin-top: 0.6rem; font-size: 1.3rem; color: var(--ink-2); }
 
 .field { display: grid; gap: 0.6rem; margin-top: 1.4rem; min-width: 0; }
 .field label { font-size: 1.3rem; color: var(--ink-2); }
@@ -448,7 +448,7 @@ html:has(.dash), html:has(.signin), html:has(.signin-wait) { font-size: 10px; }
   .work__rail { grid-column: auto; grid-row: auto; position: static; }
 }
 @media (max-width: 860px) {
-  .dash { grid-template-columns: minmax(0, 1fr); padding-bottom: calc(6.2rem + env(safe-area-inset-bottom)); }
+  .dash { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; padding-bottom: calc(6.2rem + env(safe-area-inset-bottom)); }
   .side {
     z-index: 40; height: 5.6rem; flex-direction: row; align-items: center; justify-content: space-between; gap: 1.2rem;
     padding: 0 1.6rem; border-right: 0; border-bottom: 1px solid var(--line);
@@ -464,11 +464,11 @@ html:has(.dash), html:has(.signin), html:has(.signin-wait) { font-size: 10px; }
   .side__nav a { flex-direction: column; justify-content: center; gap: 0.3rem; height: 6.2rem; padding: 0; font-size: 1.1rem; }
   .page { padding: 2rem 1.6rem 3.2rem; }
   .page-top h1 { font-size: 2.2rem; }
-  .stats { grid-template-columns: minmax(0, 1fr); }
-  .stats > div + div { border-left: 0; border-top: 1px solid var(--line); }
-  .stats > div { padding: 1.6rem; }
-  .stats .stat-n { font-size: 3rem; }
-  .overview, .overview__rail, .duo { grid-template-columns: minmax(0, 1fr); }
+  .balances { grid-template-columns: minmax(0, 1fr); }
+  .balances > div + div { border-left: 0; border-top: 1px solid var(--line); }
+  .balances > div { padding: 1.6rem; }
+  .balances .stat-n { font-size: 3rem; }
+  .overview, .overview__rail, .duo, .fields2 { grid-template-columns: minmax(0, 1fr); }
   .overview__rail { grid-column: auto; }
   .card { padding: 1.6rem; }
   .card--list { padding: 0; }

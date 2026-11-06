@@ -35,20 +35,20 @@ function Vault({ address }: { address: Address }) {
 
   return (
     <div className="stack">
-      <section className="stats" aria-label="Balances">
+      <section className="balances" aria-label="Balances">
         <div>
-          <p className="stats__k">In your vault</p>
+          <p className="balances__k">In your vault</p>
           <div className="stat-n">{usdt(vaultBal as bigint | undefined)}<small>USDT</small></div>
         </div>
         <div>
-          <p className="stats__k">In your wallet</p>
+          <p className="balances__k">In your wallet</p>
           <div className="stat-n">{usdt(walletBal as bigint | undefined)}<small>USDT</small></div>
-          <p className="stats__note mono">{short(address)}</p>
+          <p className="balances__note mono">{short(address)}</p>
         </div>
         <div>
-          <p className="stats__k">Last active</p>
+          <p className="balances__k">Last active</p>
           <div className="stat-n">{lastActive ? when(lastActive as bigint).split(",")[0] : "—"}</div>
-          <p className="stats__note">
+          <p className="balances__note">
             {nom && nom[0] !== "0x0000000000000000000000000000000000000000"
               ? <>Nominee <span className="mono">{short(nom[0])}</span> after {Number(nom[1]) / 86400} days</>
               : <Link href="/app/nominee" style={{ textDecoration: "underline" }}>No nominee set</Link>}
