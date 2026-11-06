@@ -1,0 +1,21 @@
+{
+  "name": "@ghar/agent-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ghar agent: pays verified bills from the vault within the sender's grant and caps.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test test/*.test.ts",
+    "run": "node --env-file-if-exists=.env scripts/run.ts"
+  },
+  "dependencies": {
+    "@ghar/ens": "*",
+    "@ghar/shared": "*",
+    "viem": "^2.57.16"
+  }
+}

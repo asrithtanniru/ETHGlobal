@@ -4,10 +4,11 @@
   "type": "module",
   "scripts": {
     "start": "node index.mjs",
-    "payee": "node setup-payee.mjs"
+    "payee": "node setup-payee.mjs",
+    "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "dotenv": "16.4.5",
-    "viem": "2.21.55"
+    "viem": "^2.57.16"
   }
 }

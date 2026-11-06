@@ -15,6 +15,16 @@ sender ──approve + requestPayout(10 USDT, "rent")──▶ GharPayout (White
 
 Without Onramp keys the adapter runs in **MOCK mode** (same flow, fake quote). Add keys later; nothing else changes.
 
+## Running against GharVault
+
+The adapter now serves `GharVault`, not `GharPayout`. Steps 1 and 3 below describe the original spike; `GharPayout` is kept as the record of the Transak proof.
+
+- Payouts start from the agent calling `pay()`, so there is no `requestPayout` step.
+- `OPERATOR_PRIVATE_KEY` must be the vault's `provider` key. The adapter checks this at startup.
+- For each payout it reads `ghar.payoutRef` and `ghar.biller` from ENS, and refunds if the payee is unknown, a record is missing, or the ENS biller no longer matches the vault.
+- With Onramp, `payees.json` is keyed by `payoutRef`: `node setup-payee.mjs demo:acct-rent-001 ...`.
+- A payout requested while the adapter is down is not picked up. After 1 day anyone can call `reclaim` to return the USDT to the sender.
+
 ## 0. One-time setup
 - Install Foundry: `curl -L https://foundry.paradigm.xyz | bash && foundryup`
 - Two throwaway wallets: **SENDER** (pays) and **OPERATOR** (the adapter).
