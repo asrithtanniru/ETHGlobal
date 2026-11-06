@@ -44,6 +44,19 @@ export const gharVaultAbi = [
   },
   {
     "type": "function",
+    "name": "STAKE_RATE_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "availableToAgent",
     "inputs": [
       {
@@ -116,7 +129,6 @@ export const gharVaultAbi = [
       {
         "name": "bill",
         "type": "tuple",
-        "internalType": "struct GharVault.Bill",
         "components": [
           {
             "name": "payee",
@@ -138,7 +150,8 @@ export const gharVaultAbi = [
             "type": "uint64",
             "internalType": "uint64"
           }
-        ]
+        ],
+        "internalType": "struct GharVault.Bill"
       }
     ],
     "outputs": [
@@ -244,6 +257,25 @@ export const gharVaultAbi = [
   },
   {
     "type": "function",
+    "name": "earnedOf",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "eip712Domain",
     "inputs": [],
     "outputs": [
@@ -284,6 +316,19 @@ export const gharVaultAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "fundRewards",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -425,7 +470,6 @@ export const gharVaultAbi = [
       {
         "name": "bill",
         "type": "tuple",
-        "internalType": "struct GharVault.Bill",
         "components": [
           {
             "name": "payee",
@@ -447,7 +491,8 @@ export const gharVaultAbi = [
             "type": "uint64",
             "internalType": "uint64"
           }
-        ]
+        ],
+        "internalType": "struct GharVault.Bill"
       },
       {
         "name": "signature",
@@ -602,6 +647,13 @@ export const gharVaultAbi = [
   },
   {
     "type": "function",
+    "name": "removeStakePlan",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "revokeGrant",
     "inputs": [
       {
@@ -612,6 +664,19 @@ export const gharVaultAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "rewardReserve",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -687,6 +752,122 @@ export const gharVaultAbi = [
         "name": "period",
         "type": "uint64",
         "internalType": "uint64"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setStakePlan",
+    "inputs": [
+      {
+        "name": "delay",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "keep",
+        "type": "uint128",
+        "internalType": "uint128"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "spendableOf",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "stakeIdle",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "stakeOf",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "principal",
+        "type": "uint128",
+        "internalType": "uint128"
+      },
+      {
+        "name": "earned",
+        "type": "uint128",
+        "internalType": "uint128"
+      },
+      {
+        "name": "since",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "stakePlanOf",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "delay",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "keep",
+        "type": "uint128",
+        "internalType": "uint128"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "unstake",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -1031,6 +1212,107 @@ export const gharVaultAbi = [
   },
   {
     "type": "event",
+    "name": "RewardsFunded",
+    "inputs": [
+      {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "StakePlanRemoved",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "StakePlanSet",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "delay",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "keep",
+        "type": "uint128",
+        "indexed": false,
+        "internalType": "uint128"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Staked",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Unstaked",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "principal",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "earned",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "Withdrawn",
     "inputs": [
       {
@@ -1145,7 +1427,17 @@ export const gharVaultAbi = [
   },
   {
     "type": "error",
+    "name": "InvalidStakePlan",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NoGrant",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoStakePlan",
     "inputs": []
   },
   {
@@ -1176,6 +1468,16 @@ export const gharVaultAbi = [
   },
   {
     "type": "error",
+    "name": "NothingStaked",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NothingToStake",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "ReentrancyGuardReentrantCall",
     "inputs": []
   },
@@ -1196,6 +1498,17 @@ export const gharVaultAbi = [
     "inputs": [
       {
         "name": "closesAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "StakeLocked",
+    "inputs": [
+      {
+        "name": "unlocksAt",
         "type": "uint256",
         "internalType": "uint256"
       }

@@ -120,6 +120,7 @@ Proof of one full live run on 6 Nov 2026 (bill, fake bill, `pay`, Transak order,
 | Replay protection | `payoutOf[digest]` | Global across senders. A refunded bill stays used, so the biller must re-sign |
 | Escrowed payout to a fixed provider | `markPaid`, `refund`, `reclaim`, `SETTLE_WINDOW = 1 day` | `provider` is `immutable`. There is no admin and no way to redirect funds |
 | Nominee (dead-man switch) | `setNominee`, `removeNominee`, `checkIn`, `nomineeWithdraw`, `lastActive` | Any sender action resets the timer. Agent payments do not, so bills keep being paid while the timer runs |
+| Stake when idle (test money) | `setStakePlan`, `removeStakePlan`, `stakeIdle`, `unstake`, `fundRewards`, `earnedOf`, `spendableOf` | Opt-in. After the sender's delay, the balance above `keep` earns a fixed 5% a year from `rewardReserve`. The USDT never leaves the vault. `pay` and withdrawals unstake when they need the money, and the agent unstakes when the sender is active again. Earnings stop at what the reserve holds |
 | Events for UIs and the settler | `PayoutRequested`, `PayoutCompleted`, `PayoutRefunded`, `PayoutReclaimed`, and others | The Activity page and the settler read these |
 
 **Operational quirks.**

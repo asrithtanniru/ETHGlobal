@@ -46,7 +46,7 @@ function PayBill({ address, digest }: { address: Address; digest: Hex }) {
   const ready = useReadContracts({
     contracts: [
       { ...vault, functionName: "billerOf", args: [address, namehash(payee ?? "x.eth")] },
-      { ...vault, functionName: "balanceOf", args: [address] },
+      { ...vault, functionName: "spendableOf", args: [address] },
       { ...vault, functionName: "availableToAgent", args: [address, agent ?? address] },
     ],
     query: { enabled: !!payee && !!agent, refetchInterval: 10_000 },

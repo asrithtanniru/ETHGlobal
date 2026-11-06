@@ -68,7 +68,7 @@ export async function readiness(sender: Address) {
   const read = <T,>(functionName: string, args: unknown[]) => chainClient.readContract({ ...vault, functionName, args } as never) as Promise<T>;
   const [biller, payeeAvailable, agentAvailable, balance] = await Promise.all([
     read<Address>("billerOf", [sender, node]), read<bigint>("availableToPayee", [sender, node]),
-    read<bigint>("availableToAgent", [sender, agent]), read<bigint>("balanceOf", [sender]),
+    read<bigint>("availableToAgent", [sender, agent]), read<bigint>("spendableOf", [sender]),
   ]);
   return { biller, payeeAvailable, agentAvailable, balance, agent, directBiller: directBiller()!.address };
 }

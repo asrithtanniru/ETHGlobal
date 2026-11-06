@@ -5,6 +5,7 @@ import type { BillCheck, InboxBill } from "@ghar/arkiv";
 export interface VaultView {
   /** billerOf(sender, payee): the wallet the sender accepted when adding the payee. */
   biller: Address;
+  /** spendableOf(sender): the balance plus any stake, which returns when a payment needs it. */
   balance: bigint;
   availableToPayee: bigint;
   availableToAgent: bigint;

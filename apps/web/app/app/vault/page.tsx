@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { erc20Abi, type Address } from "viem";
+import { erc20Abi, formatUnits, type Address } from "viem";
 import { useReadContract, useReadContracts } from "wagmi";
 import { GHAR_VAULT, USDT, settlementChain } from "@ghar/shared";
 import { PageHead, RequireWallet, TxStatus } from "@/components/app/AppShell";
@@ -27,10 +27,14 @@ function Vault({ address }: { address: Address }) {
       { ...token, functionName: "balanceOf", args: [address] },
       { ...vault, functionName: "nomineeOf", args: [address] },
       { ...vault, functionName: "lastActive", args: [address] },
+      { ...vault, functionName: "stakePlanOf", args: [address] },
+      { ...vault, functionName: "stakeOf", args: [address] },
+      { ...vault, functionName: "earnedOf", args: [address] },
+      { ...vault, functionName: "rewardReserve" },
     ],
   });
   const allowance = useReadContract({ ...token, functionName: "allowance", args: [address, GHAR_VAULT] });
-  const [vaultBal, walletBal, nominee, lastActive] = data?.map((d) => d.result) ?? [];
+  const [vaultBal, walletBal, nominee, lastActive, plan, stake, earned, reserve] = data?.map((d) => d.result) ?? [];
   const nom = nominee as readonly [Address, bigint] | undefined;
   const refresh = () => { refetch(); allowance.refetch(); };
 
@@ -61,6 +65,14 @@ function Vault({ address }: { address: Address }) {
         <Withdraw address={address} onDone={refresh} />
         <div className="overview__rail">
           <CheckIn address={address} onDone={refresh} />
+          <Staking
+            address={address}
+            plan={plan as readonly [bigint, bigint] | undefined}
+            staked={(stake as readonly [bigint, bigint, bigint] | undefined)?.[0]}
+            earned={earned as bigint | undefined}
+            reserve={reserve as bigint | undefined}
+            onDone={refresh}
+          />
           <section className="card">
             <h2 className="card__h">Next</h2>
             <ul className="next">
@@ -147,6 +159,45 @@ function Withdraw({ address, onDone }: { address: Address; onDone: () => void })
         <span className="hint">{validTo ? "Leave empty to send back to this wallet." : "Enter a 0x address."}</span>
       </div>
       <div className="form-actions"><button className="btn" disabled={!v || !validTo || tx.busy}>Withdraw</button></div>
+      <TxStatus state={tx.state} />
+    </form>
+  );
+}
+
+function Staking({ address, plan, staked, earned, reserve, onDone }: { address: Address; plan?: readonly [bigint, bigint]; staked?: bigint; earned?: bigint; reserve?: bigint; onDone: () => void }) {
+  const [days, setDays] = useState("");
+  const [keep, setKeep] = useState("");
+  const tx = useTx(() => { setDays(""); setKeep(""); onDone(); });
+  const seconds = Math.round(Number(days) * 86400);
+  const validDays = Number.isFinite(seconds) && seconds > 0;
+  const k = Number(keep) === 0 ? 0n : parseUsdt(keep);
+  const on = !!plan && plan[0] > 0n;
+  return (
+    <form className="card" onSubmit={(e) => { e.preventDefault(); if (validDays && k !== undefined) tx.run([{ ...vault, functionName: "setStakePlan", args: [BigInt(seconds), k], account: address }] as never, "Stake plan saved"); }}>
+      <h2 className="card__h">Stake when idle</h2>
+      <p className="card__p">Test money only, at a fixed 5% a year paid from a test reserve. If you stay inactive, your balance above the amount you keep starts earning. It never leaves the vault, and bills still get paid.</p>
+      {on && (
+        <dl className="kv">
+          <dt>after</dt><dd>{Number((Number(plan[0]) / 86400).toFixed(3))} days inactive</dd>
+          <dt>keep</dt><dd>{usdt(plan[1])} USDT</dd>
+          <dt>staked</dt><dd>{usdt(staked)} USDT</dd>
+          <dt>earned</dt><dd>{earned === undefined ? "—" : formatUnits(earned, USDT.decimals)} USDT</dd>
+          <dt>reserve</dt><dd>{usdt(reserve)} USDT</dd>
+        </dl>
+      )}
+      <div className="field">
+        <label htmlFor="sd">Days inactive</label>
+        <input id="sd" inputMode="decimal" placeholder="30" value={days} onChange={(e) => setDays(e.target.value)} />
+      </div>
+      <div className="field">
+        <label htmlFor="sk">Keep for bills (USDT)</label>
+        <input id="sk" inputMode="decimal" placeholder="0.00" value={keep} onChange={(e) => setKeep(e.target.value)} />
+      </div>
+      <div className="form-actions">
+        <button className="btn" disabled={!validDays || k === undefined || tx.busy}>{on ? "Update plan" : "Allow staking"}</button>
+        {!!staked && <button type="button" className="btn btn--ghost" disabled={tx.busy} onClick={() => tx.run([{ ...vault, functionName: "unstake", args: [address], account: address }] as never, "Unstaked")}>Unstake now</button>}
+        {on && <button type="button" className="btn btn--ghost" disabled={tx.busy} onClick={() => tx.run([{ ...vault, functionName: "removeStakePlan", account: address }] as never, "Staking turned off")}>Turn off</button>}
+      </div>
       <TxStatus state={tx.state} />
     </form>
   );

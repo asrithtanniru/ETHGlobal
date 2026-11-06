@@ -66,7 +66,7 @@ function ActAsNominee({ address }: { address: Address }) {
   const valid = isAddress(sender.trim());
   const s = (valid ? sender.trim() : ZERO) as Address;
   const { data, refetch } = useReadContracts({
-    contracts: [{ ...vault, functionName: "nomineeOf", args: [s] }, { ...vault, functionName: "lastActive", args: [s] }, { ...vault, functionName: "balanceOf", args: [s] }],
+    contracts: [{ ...vault, functionName: "nomineeOf", args: [s] }, { ...vault, functionName: "lastActive", args: [s] }, { ...vault, functionName: "spendableOf", args: [s] }],
     query: { enabled: valid },
   });
   const nom = data?.[0]?.result as readonly [Address, bigint] | undefined;

@@ -82,7 +82,7 @@ async function payeeBook(sender: Address, known: string[]) {
 
 async function vaultView(sender: Address, node: Hex, agent: Address): Promise<VaultView> {
   const [biller, balance, availableToPayee, availableToAgent] = await Promise.all([
-    read<Address>("billerOf", [sender, node]), read<bigint>("balanceOf", [sender]),
+    read<Address>("billerOf", [sender, node]), read<bigint>("spendableOf", [sender]),
     read<bigint>("availableToPayee", [sender, node]), read<bigint>("availableToAgent", [sender, agent]),
   ]);
   return { biller, balance, availableToPayee, availableToAgent };
@@ -93,7 +93,7 @@ async function vaultOverview(sender: Address, known: string[]) {
   const agent = chatAgent();
   const book = await payeeBook(sender, known);
   const [balance, agentAvailable, payees] = await Promise.all([
-    read<bigint>("balanceOf", [sender]),
+    read<bigint>("spendableOf", [sender]),
     agent ? read<bigint>("availableToAgent", [sender, agent.address]) : 0n,
     Promise.all(book.map(async (p) => ({
       name: p.name ?? "unnamed payee (the sender can name it by looking it up once on the Payees page)",

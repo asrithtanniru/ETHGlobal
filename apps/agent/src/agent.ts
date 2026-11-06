@@ -9,6 +9,7 @@ import { buildPayeeName, getVerifiedPayee, payeeFamily } from "@ghar/ens";
 import { arkivClient, checkBill, openBills, toVaultBill, type InboxBill } from "@ghar/arkiv";
 import { decide } from "./decide.ts";
 import { loadHolds, parseDigests, recordHold } from "./holds.ts";
+import { stakeAction } from "./stake.ts";
 import { groqEndpoints, parseKeys } from "./llm.ts";
 import { llmReviewer, noReview, REVIEW_FAILED, reviewBill, vaultPastAmounts } from "./reviewer.ts";
 
@@ -60,7 +61,7 @@ async function tick() {
       if (done.has(bill.digest)) continue;
       const [biller, balance, availableToPayee, availableToAgent] = await Promise.all([
         read("billerOf" as never, [sender, node] as never),
-        read("balanceOf" as never, [sender] as never),
+        read("spendableOf" as never, [sender] as never),
         read("availableToPayee" as never, [sender, node] as never),
         read("availableToAgent" as never, [sender, account.address] as never),
       ]) as [Address, bigint, bigint, bigint];
@@ -86,10 +87,29 @@ async function tick() {
   }
 }
 
+/** Follows the sender's stake plan. The vault re-checks the plan and the timer on every call. */
+async function tendStake() {
+  const [plan, stake, balance, lastActive, block] = await Promise.all([
+    read("stakePlanOf" as never, [sender] as never),
+    read("stakeOf" as never, [sender] as never),
+    read("balanceOf" as never, [sender] as never),
+    read("lastActive" as never, [sender] as never),
+    chain.getBlock(),
+  ]) as [readonly [bigint, bigint], readonly [bigint, bigint, bigint], bigint, bigint, { timestamp: bigint }];
+  const action = stakeAction({ delay: plan[0], keep: plan[1], balance, staked: stake[0], lastActive }, block.timestamp);
+  if (!action) return;
+  const { request } = await chain.simulateContract({ ...vault, account, functionName: action === "stake" ? "stakeIdle" : "unstake", args: [sender] });
+  const hash = await wallet.writeContract(request);
+  const r = await chain.waitForTransactionReceipt({ hash });
+  if (r.status !== "success") throw new Error(`${action} reverted: ${hash}`);
+  log(`${action === "stake" ? "staked idle balance" : "sender is back, unstaked"}: ${settlementChain.blockExplorers?.default.url}/tx/${hash}`);
+}
+
 log(`agent ${account.address} paying for ${sender}: ${tags.join(", ")}`);
 log(keys.length ? `AI review on, ${keys.length} Groq key(s)` : "AI review OFF: GROQ_API_KEYS is not set");
 if (done.size) log(`${done.size} bill(s) on hold from earlier runs. Add a digest to APPROVED_DIGESTS to release it.`);
 for (;;) {
   await tick().catch((e) => log("tick failed:", (e as Error).message.split("\n")[0]));
+  await tendStake().catch((e) => log("stake check failed:", (e as Error).message.split("\n")[0]));
   await new Promise((r) => setTimeout(r, Number(process.env.POLL_SECONDS ?? 30) * 1000));
 }

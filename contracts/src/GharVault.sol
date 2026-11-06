@@ -112,6 +112,31 @@ contract GharVault is ReentrancyGuard, EIP712 {
     /// @notice Last time each sender acted on the vault themselves.
     mapping(address sender => uint256 timestamp) public lastActive;
 
+    /// @notice What a sender agreed to: after `delay` seconds without activity, everything above
+    ///         `keep` may be staked. `delay == 0` means the sender has not agreed.
+    struct StakePlan {
+        uint64 delay;
+        uint128 keep;
+    }
+
+    /// @notice USDT staked for a sender. `earned` holds what accrued before `since`.
+    struct Stake {
+        uint128 principal;
+        uint128 earned;
+        uint64 since;
+    }
+
+    /// @notice Test-network yearly rate on staked USDT, in basis points. Paid only from
+    ///         `rewardReserve`, so it is a fixed test rate and not a market yield.
+    uint256 public constant STAKE_RATE_BPS = 500;
+
+    mapping(address sender => StakePlan) public stakePlanOf;
+
+    mapping(address sender => Stake) public stakeOf;
+
+    /// @notice USDT set aside to pay earnings. Staked USDT itself never leaves the vault.
+    uint256 public rewardReserve;
+
     event Deposited(address indexed sender, uint256 amount);
     event Withdrawn(address indexed sender, address indexed to, uint256 amount);
     event GrantSet(
@@ -136,6 +161,11 @@ contract GharVault is ReentrancyGuard, EIP712 {
     event NomineeWithdrawn(
         address indexed sender, address indexed nominee, address to, uint256 amount
     );
+    event StakePlanSet(address indexed sender, uint64 delay, uint128 keep);
+    event StakePlanRemoved(address indexed sender);
+    event Staked(address indexed sender, uint256 amount);
+    event Unstaked(address indexed sender, uint256 principal, uint256 earned);
+    event RewardsFunded(address indexed from, uint256 amount);
     /// @notice The provider reads this to pay the payee's verified account in local currency.
     event PayoutRequested(
         address indexed sender,
@@ -170,6 +200,11 @@ contract GharVault is ReentrancyGuard, EIP712 {
     error NotProvider();
     error NotPending();
     error SettleWindowOpen(uint256 closesAt);
+    error InvalidStakePlan();
+    error NoStakePlan();
+    error StakeLocked(uint256 unlocksAt);
+    error NothingToStake();
+    error NothingStaked();
 
     /// @dev Records that the sender is alive. Agent payments never call this, so a silent
     ///      sender's bills keep getting paid while the nominee timer still runs out.
@@ -253,6 +288,59 @@ contract GharVault is ReentrancyGuard, EIP712 {
         emit NomineeWithdrawn(sender, msg.sender, to, amount);
     }
 
+    /// @notice Agrees that after `delay` seconds without any action from the caller, their
+    ///         balance above `keep` may be staked. Replaces any earlier plan.
+    function setStakePlan(uint64 delay, uint128 keep) external touch {
+        if (delay == 0) revert InvalidStakePlan();
+        stakePlanOf[msg.sender] = StakePlan(delay, keep);
+        emit StakePlanSet(msg.sender, delay, keep);
+    }
+
+    /// @notice Withdraws the caller's agreement and returns anything staked to their balance.
+    function removeStakePlan() external touch {
+        if (stakePlanOf[msg.sender].delay == 0) revert NoStakePlan();
+        delete stakePlanOf[msg.sender];
+        _unstake(msg.sender);
+        emit StakePlanRemoved(msg.sender);
+    }
+
+    /// @notice Stakes `sender`'s balance above their `keep` once they have been inactive for
+    ///         their chosen delay. Anyone can call this: it only does what the sender agreed to,
+    ///         and the USDT stays in this vault.
+    function stakeIdle(address sender) external {
+        StakePlan memory plan = stakePlanOf[sender];
+        if (plan.delay == 0) revert NoStakePlan();
+        uint256 unlocksAt = lastActive[sender] + plan.delay;
+        if (block.timestamp < unlocksAt) revert StakeLocked(unlocksAt);
+        uint256 available = balanceOf[sender];
+        if (available <= plan.keep) revert NothingToStake();
+        uint256 amount = available - plan.keep;
+        balanceOf[sender] = plan.keep;
+        Stake storage s = stakeOf[sender];
+        s.earned = uint128(_accrued(s));
+        s.principal += uint128(amount);
+        s.since = uint64(block.timestamp);
+        emit Staked(sender, amount);
+    }
+
+    /// @notice Returns `sender`'s stake and earnings to their balance. Anyone can call this,
+    ///         because the USDT can only go back to the sender. Counts as activity only when
+    ///         the sender calls it.
+    function unstake(address sender) external {
+        if (stakeOf[sender].principal == 0) revert NothingStaked();
+        if (msg.sender == sender) lastActive[sender] = block.timestamp;
+        _unstake(sender);
+    }
+
+    /// @notice Adds `amount` USDT from the caller to the reserve that pays earnings.
+    /// @dev The caller must approve this contract for `amount` first.
+    function fundRewards(uint256 amount) external nonReentrant {
+        if (amount == 0) revert ZeroAmount();
+        rewardReserve += amount;
+        usdt.safeTransferFrom(msg.sender, address(this), amount);
+        emit RewardsFunded(msg.sender, amount);
+    }
+
     /// @notice Lets `agent` pay bills from the caller's balance within these limits.
     function setGrant(address agent, uint128 perPayment, uint128 perPeriod, uint64 period)
         external
@@ -313,6 +401,8 @@ contract GharVault is ReentrancyGuard, EIP712 {
             revert InvalidSignature();
         }
 
+        // A staked sender's bills still get paid: the stake comes back first when it is needed.
+        if (bill.amount > balanceOf[sender]) _unstake(sender);
         uint256 available = balanceOf[sender];
         if (bill.amount > available) revert InsufficientBalance(available, bill.amount);
         balanceOf[sender] = available - bill.amount;
@@ -369,6 +459,18 @@ contract GharVault is ReentrancyGuard, EIP712 {
         return _available(payeeOf[sender][payee]);
     }
 
+    /// @notice Earnings `sender` would receive if unstaked now, limited by the reward reserve.
+    function earnedOf(address sender) public view returns (uint256) {
+        uint256 earned = _accrued(stakeOf[sender]);
+        return earned < rewardReserve ? earned : rewardReserve;
+    }
+
+    /// @notice What `sender` can spend right now: their balance plus stake and earnings, which
+    ///         return automatically when a payment or withdrawal needs them.
+    function spendableOf(address sender) external view returns (uint256) {
+        return balanceOf[sender] + stakeOf[sender].principal + earnedOf(sender);
+    }
+
     function _pendingForProvider(bytes32 digest) private view returns (Payout storage p) {
         if (msg.sender != provider) revert NotProvider();
         p = payoutOf[digest];
@@ -378,10 +480,29 @@ contract GharVault is ReentrancyGuard, EIP712 {
     function _withdraw(address sender, uint256 amount, address to) private {
         if (to == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
+        if (amount > balanceOf[sender]) _unstake(sender);
         uint256 available = balanceOf[sender];
         if (amount > available) revert InsufficientBalance(available, amount);
         balanceOf[sender] = available - amount;
         usdt.safeTransfer(to, amount);
+    }
+
+    /// @dev Moves `sender`'s stake and earnings to their balance. Does nothing without a stake.
+    ///      The principal always comes back in full. Earnings stop at what the reserve holds.
+    function _unstake(address sender) private {
+        uint256 principal = stakeOf[sender].principal;
+        if (principal == 0) return;
+        uint256 earned = earnedOf(sender);
+        delete stakeOf[sender];
+        rewardReserve -= earned;
+        balanceOf[sender] += principal + earned;
+        emit Unstaked(sender, principal, earned);
+    }
+
+    /// @dev Simple interest since `s.since` on top of what already accrued.
+    function _accrued(Stake storage s) private view returns (uint256) {
+        uint256 elapsed = block.timestamp - s.since;
+        return s.earned + uint256(s.principal) * STAKE_RATE_BPS * elapsed / (10_000 * 365 days);
     }
 
     /// @dev Charges `amount` to the grant `sender` gave `msg.sender`.
