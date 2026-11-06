@@ -2,14 +2,17 @@ import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/inter/opsz.css";
 import "@fontsource-variable/geist-mono";
 import "./globals.css";
+import { RegisterSW } from "@/components/RegisterSW";
 
 export const metadata: Metadata = {
   title: "Kin · Pay the bills back home from your stablecoins",
   description:
     "Kin holds your USDT in an onchain vault and pays your family's bills, only to accounts a licensed provider verified.",
+  applicationName: "Kin",
+  appleWebApp: { capable: true, title: "Kin", statusBarStyle: "default" },
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#f4f3ef" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#f4f3ef" };
 
 // Hide reveal targets before first paint only when JS runs and motion is allowed.
 const boot = `if(!matchMedia('(prefers-reduced-motion: reduce)').matches)document.documentElement.classList.add('js')`;
@@ -20,7 +23,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: boot }} />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <RegisterSW />
+      </body>
     </html>
   );
 }

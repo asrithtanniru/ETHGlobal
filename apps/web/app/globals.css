@@ -641,8 +641,9 @@ a.inline { color: var(--ink); text-decoration: underline; text-underline-offset:
 @media (max-width: 860px) {
   .dash { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; padding-bottom: calc(6.2rem + env(safe-area-inset-bottom)); }
   .side {
-    z-index: 40; height: 5.6rem; flex-direction: row; align-items: center; justify-content: space-between; gap: 1.2rem;
-    padding: 0 1.6rem; border-right: 0; border-bottom: 1px solid var(--line);
+    z-index: 40; height: calc(5.6rem + env(safe-area-inset-top)); flex-direction: row; align-items: center; justify-content: space-between; gap: 1.2rem;
+    padding: env(safe-area-inset-top) calc(1.6rem + env(safe-area-inset-right)) 0 calc(1.6rem + env(safe-area-inset-left));
+    border-right: 0; border-bottom: 1px solid var(--line);
   }
   .side__logo { padding: 0; }
   .side__wallet { margin: 0; padding: 0; border: 0; display: flex; align-items: center; gap: 1rem; }
@@ -650,10 +651,11 @@ a.inline { color: var(--ink); text-decoration: underline; text-underline-offset:
   .side__net { font-size: 0; gap: 0; }
   .side__nav {
     position: fixed; inset: auto 0 0 0; z-index: 40; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 0;
-    padding-bottom: env(safe-area-inset-bottom); background: var(--paper-sunk); border-top: 1px solid var(--line);
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background: var(--paper-sunk); border-top: 1px solid var(--line);
   }
   .side__nav a { flex-direction: column; justify-content: center; gap: 0.3rem; height: 6.2rem; padding: 0; font-size: 1.1rem; }
-  .page { padding: 2rem 1.6rem 3.2rem; }
+  .page { padding: 2rem calc(1.6rem + env(safe-area-inset-right)) 3.2rem calc(1.6rem + env(safe-area-inset-left)); }
   .page-top h1 { font-size: 2.2rem; }
   .balances { grid-template-columns: minmax(0, 1fr); }
   .balances > div + div { border-left: 0; border-top: 1px solid var(--line); }
@@ -676,7 +678,7 @@ a.inline { color: var(--ink); text-decoration: underline; text-underline-offset:
   .signin__panel { padding: 2.4rem 1.6rem; gap: 3.2rem; }
   .signin__panel .logo { display: none; }
   .hist, .side__roles { display: none; }
-  .chat { height: calc(100svh - 5.6rem - 6.2rem - env(safe-area-inset-bottom)); }
+  .chat { height: calc(100svh - 5.6rem - env(safe-area-inset-top) - 6.2rem - env(safe-area-inset-bottom)); }
   .chat__col, .chat__dock, .chat__hello { width: calc(100% - 3.2rem); }
   .chat__col { padding-top: 2.4rem; }
   .chat__hello h1 { font-size: 2.6rem; }
