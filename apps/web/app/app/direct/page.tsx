@@ -20,7 +20,7 @@ const STATUS_TEXT: Record<SendRow["status"], string> = { unpaid: "not sent", pen
 export default function PayDirect() {
   return (
     <div className="page">
-      <PageHead title="Pay with Direct">Send money from your vault to anyone. They claim it to their card or bank through Transak, and your vault releases the USDT only after they are paid.</PageHead>
+      <PageHead title="Pay with Direct">Send money from your vault to anyone. They claim it to their card or bank through Transak, or in INR to their UPI ID through P2P.me, and your vault releases the USDT only after they are paid.</PageHead>
       <RequireWallet>{(a) => <Direct address={a} />}</RequireWallet>
     </div>
   );
@@ -58,7 +58,8 @@ function Direct({ address }: { address: Address }) {
           <li>You enter an amount, a currency and your friend&apos;s email.</li>
           <li>Your vault locks the USDT for the payout provider. You sign once; Kin pays the gas.</li>
           <li>You share the claim link. Your friend opens it, signs in to Transak with that email and adds their card or bank.</li>
-          <li>Transak pays them. Only then does the vault release the USDT to the provider. A failed order refunds it to your vault, and an untouched one can be reclaimed after a day.</li>
+          <li>For INR, your friend just enters their UPI ID instead, and a P2P.me merchant pays it.</li>
+          <li>Transak or the P2P.me merchant pays them. Only then does the vault release the USDT to the provider. A failed order refunds it to your vault, and an untouched one can be reclaimed after a day.</li>
         </ol>
         <p className="card__p">Testnet: Transak staging pays from the provider&apos;s Sepolia ETH float at its test price, so the fiat amount differs from the USDT.</p>
       </aside>
@@ -153,7 +154,7 @@ function SendForm({ address, ready, enabled, header, ensure, onDone }: { address
       <div className="field">
         <label htmlFor="d-mail">Friend&apos;s email</label>
         <input id="d-mail" type="email" placeholder="friend@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <span className="hint">Only someone signed in to Transak with this email can claim it.</span>
+        <span className="hint">{currency === "INR" ? "They claim it to their UPI ID through P2P.me with the link you share." : "Only someone signed in to Transak with this email can claim it."}</span>
       </div>
       <div className="form-actions"><button className="btn" disabled={!enabled || busy || !amount || !email}>{busy ? "Sending" : "Create claim link"}</button></div>
       <TxStatus state={state} />

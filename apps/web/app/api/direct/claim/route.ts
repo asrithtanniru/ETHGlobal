@@ -20,14 +20,14 @@ export async function GET(req: Request) {
   }
 }
 
-/** Opens the Transak order for this claim and returns where to send the friend. */
+/** Opens the payout for this claim: the Transak link to send the friend to, or for INR the P2P.me order to their UPI ID. */
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => ({}))) as { digest?: string; t?: string };
+  const body = (await req.json().catch(() => ({}))) as { digest?: string; t?: string; upi?: unknown };
   const c = claimOf(body.digest, body.t);
   if (!c) return json({ error: "This claim link isn't valid." }, 404);
   try {
-    const { widgetUrl } = await startClaim(c, body.t!, new URL(req.url).origin);
-    return json({ widgetUrl });
+    const { widgetUrl } = await startClaim(c, body.t!, new URL(req.url).origin, typeof body.upi === "string" ? body.upi : undefined);
+    return json(widgetUrl ? { widgetUrl } : { started: true });
   } catch (e) {
     return json({ error: explain(e) }, 422);
   }

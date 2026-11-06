@@ -1,7 +1,8 @@
 // Pay with Direct, shared by the browser and the server: what a send looks like and the rules for one.
 import { parseUnits, type Hex } from "viem";
 
-export const CURRENCIES = ["USD", "EUR", "GBP"] as const;
+/** INR pays out to a UPI ID through P2P.me; the rest through Transak. */
+export const CURRENCIES = ["USD", "EUR", "GBP", "INR"] as const;
 export type Currency = (typeof CURRENCIES)[number];
 /** 1 to 1,000 USDT per send; the sender's own Direct cap in the vault can be lower. */
 export const MIN_SEND = 1_000_000n;
@@ -17,7 +18,7 @@ export function parseSend(body: unknown): { amount: bigint; currency: Currency; 
   if (!/^\d{1,7}(\.\d{1,6})?$/.test(raw)) return { error: "Enter an amount in USDT, like 25 or 12.50." };
   const amount = parseUnits(raw, 6);
   if (amount < MIN_SEND || amount > MAX_SEND) return { error: "Send between 1 and 1,000 USDT." };
-  if (!CURRENCIES.includes(b.currency as Currency)) return { error: "Choose USD, EUR or GBP." };
+  if (!CURRENCIES.includes(b.currency as Currency)) return { error: "Choose USD, EUR, GBP or INR." };
   const email = typeof b.email === "string" ? b.email.trim().toLowerCase() : "";
   if (!EMAIL.test(email)) return { error: "Enter your friend's email. Only they can claim the money with it." };
   return { amount, currency: b.currency as Currency, email };

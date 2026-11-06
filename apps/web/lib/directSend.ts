@@ -150,9 +150,9 @@ export function claimView(c: Claim): Promise<ClaimView> {
   return view;
 }
 
-/** Opens the Transak order for the friend, bound to their email, returning to the claim page. */
-export async function startClaim(c: Claim, token: string, origin: string) {
+/** Opens the payout for the friend: a Transak order bound to their email, or for INR a P2P.me order to their UPI ID. */
+export async function startClaim(c: Claim, token: string, origin: string, upi?: string) {
   if (Date.now() > c.at + CLAIM_HOURS * 3_600_000) throw new Error("This claim link has expired. Ask the sender to send again.");
-  return steps(() => payouts().start(c.digest, { fiatCurrency: c.currency, email: c.email, redirectURL: `${origin}/claim/${c.digest}?t=${token}` }));
+  return steps(() => payouts().start(c.digest, { fiatCurrency: c.currency, email: c.email, redirectURL: `${origin}/claim/${c.digest}?t=${token}`, upi }));
 }
 

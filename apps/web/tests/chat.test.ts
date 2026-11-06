@@ -77,7 +77,8 @@ test("a Direct send needs a sane amount, a supported currency and the friend's e
   const { maskEmail, parseSend } = await import("../lib/directShared.ts");
   assert.deepEqual(parseSend({ amount: "12.5", currency: "GBP", email: " Friend@Example.com " }), { amount: 12_500_000n, currency: "GBP", email: "friend@example.com" });
   for (const amount of ["0", "0.5", "1000.000001", "abc", "", "1e3", "-5"]) assert.ok("error" in parseSend({ amount, currency: "USD", email: "a@b.co" }), amount);
-  assert.ok("error" in parseSend({ amount: "5", currency: "INR", email: "a@b.co" }));
+  assert.deepEqual(parseSend({ amount: "5", currency: "INR", email: "a@b.co" }), { amount: 5_000_000n, currency: "INR", email: "a@b.co" });
+  assert.ok("error" in parseSend({ amount: "5", currency: "JPY", email: "a@b.co" }));
   for (const email of ["", "nobody", "a@b", "a b@c.de"]) assert.ok("error" in parseSend({ amount: "5", currency: "USD", email }), email);
   assert.equal(maskEmail("ravi@example.com"), "r•••@example.com");
 });

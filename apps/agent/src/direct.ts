@@ -1,13 +1,15 @@
 // One payout's provider-side steps, shared by the settler (terminal) and the Pay with Direct page (browser).
 // Every step reads chain state first, so calling it again never pays, deposits or settles twice.
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
-import { formatUnits, isAddress, type Account, type Address, type Chain, type Hex, type PublicClient, type Transport, type WalletClient } from "viem";
+import { formatUnits, isAddress, parseUnits, type Account, type Address, type Chain, type Hex, type PublicClient, type Transport, type WalletClient } from "viem";
 import { GHAR_VAULT, GHAR_VAULT_DEPLOY_BLOCK, gharVaultAbi, USDT, type VerifiedPayee } from "@ghar/shared";
 import { getVerifiedPayee } from "@ghar/ens";
 import { billByDigest, receiptForDigest, type ArkivReader, type InboxBill } from "@ghar/arkiv";
 import { postReceipt } from "@ghar/arkiv/write";
 // @ts-expect-error plain JS helper from the payout spike
 import * as transak from "../../../ghar-payout-spike/adapter/transak.mjs";
+import * as p2pme from "./p2pme.ts";
+import type { Order as P2pOrder } from "@p2pdotme/sdk/orders";
 import { billMatchesPayee, checkPayout, isMissingPayee, type PayoutCheck } from "./payout-check.ts";
 
 export interface DirectConfig {
@@ -37,7 +39,9 @@ export const orderIdFor = (digest: Hex) => `ghar-${digest.slice(2, 18)}`;
 
 export type Stage =
   | "review-failed" | "awaiting-widget" | "awaiting-deposit" | "deposit-sent" | "deposit-uncertain"
-  | "amount-mismatch" | "processing" | "paid" | "refunded" | "receipt-pending";
+  | "amount-mismatch" | "processing" | "paid" | "refunded" | "receipt-pending"
+  // INR through P2P.me
+  | "awaiting-upi" | "order-uncertain" | "awaiting-merchant" | "upi-sent" | "upi-uncertain" | "merchant-paying" | "disputed";
 
 export interface Review {
   digest: Hex;
@@ -62,7 +66,17 @@ export interface Progress {
   reason?: string;
 }
 
-export type DepositEntry = { orderId: string; phase: "intent" | "sent"; hash?: Hex; to?: Address };
+export type DepositEntry = {
+  orderId: string;
+  phase: "intent" | "sent" | "place-intent" | "placed" | "upi-intent" | "upi-sent";
+  hash?: Hex;
+  to?: Address;
+  /** P2P.me's own order id, and the friend's UPI ID sealed to the provider's relay key. */
+  p2pOrderId?: string;
+  upi?: string;
+};
+/** INR sends pay out through P2P.me; every other currency through Transak. */
+export const viaP2p = (bill?: { currency: string }) => bill?.currency === "INR";
 
 export function directPayouts(cfg: DirectConfig) {
   const vault = { address: GHAR_VAULT, abi: gharVaultAbi } as const;
@@ -115,15 +129,48 @@ export function directPayouts(cfg: DirectConfig) {
   }
 
   /** Opens the payout order and returns the widget link the recipient confirms in. */
-  async function start(digest: Hex, opts: { fiatCurrency?: string; redirectURL?: string; email?: string } = {}) {
+  async function start(digest: Hex, opts: { fiatCurrency?: string; redirectURL?: string; email?: string; upi?: string } = {}) {
     const r = await review(digest);
     if (r.status !== "pending") throw new Error(`This payout is ${r.status}, not pending.`);
     if (!r.check.ok) throw new Error(`Review failed: ${r.check.reason}. Refund it instead.`);
     const orderId = orderIdFor(digest);
+    if (viaP2p(r.bill)) return { orderId, widgetUrl: undefined, payoutRef: r.check.payoutRef, amountUsdt: r.amountUsdt, ...(await startP2p(orderId, r, opts.upi)) };
     const widgetUrl = (await transak.createSellWidget({
       partnerOrderId: orderId, cryptoAmount: Number(cfg.sellEth), email: opts.email ?? cfg.email, fiatCurrency: opts.fiatCurrency, redirectURL: opts.redirectURL,
     })) as string;
     return { orderId, widgetUrl, payoutRef: r.check.payoutRef, amountUsdt: r.amountUsdt };
+  }
+
+  /** Places the one P2P.me SELL order for this payout; the friend's UPI ID waits sealed until a merchant accepts. */
+  async function startP2p(orderId: string, r: Review, upi = "") {
+    const log = deposits(orderId);
+    const placed = log.find((e) => e.phase === "placed");
+    if (placed) return { p2pOrderId: placed.p2pOrderId };
+    if (log.length) throw new Error("A P2P.me order may already be open for this payout. The provider has to check it first.");
+    upi = upi.trim();
+    if (!p2pme.validUpi(upi)) throw new Error("Enter a UPI ID like name@okhdfcbank.");
+    const sealed = await p2pme.sealUpi(upi);
+    // The intent line goes in only after the preflight passes, so a rejected order can be tried again.
+    const out = await p2pme.placeSell(parseUnits(r.amountUsdt, USDT.decimals), () => note({ orderId, phase: "place-intent" }));
+    note({ orderId, phase: "placed", p2pOrderId: out.orderId.toString(), hash: out.hash, upi: sealed });
+    return { p2pOrderId: out.orderId.toString() };
+  }
+
+  /** One P2P.me step: wait for a merchant, hand over the UPI ID once, settle when the order ends. */
+  async function advanceP2p(digest: Hex, orderId: string, payoutRef: string): Promise<Progress> {
+    const log = deposits(orderId);
+    const placed = log.find((e) => e.phase === "placed");
+    if (!placed) return { stage: log.length ? "order-uncertain" : "awaiting-upi", orderId };
+    const order = await p2pme.getOrder(BigInt(placed.p2pOrderId!));
+    const step = nextP2pStep(order, log);
+    if (step.kind === "paid") return finish(digest, { ok: true, ref: `P2P.me-${order.orderId}`, fiat: `${formatUnits(order.actualFiatAmount, 6)} INR`, payoutRef });
+    if (step.kind === "refund") return finish(digest, { ok: false, reason: step.reason });
+    const base = { orderId, orderStatus: order.status, depositTx: log.find((e) => e.phase === "upi-sent")?.hash ?? placed.hash };
+    if (step.kind !== "deliver") return { stage: step.kind, ...base };
+    note({ orderId, phase: "upi-intent" });
+    const hash = await p2pme.deliverUpi(order, placed.upi!);
+    note({ orderId, phase: "upi-sent", hash });
+    return { stage: "upi-sent", ...base, depositTx: hash };
   }
 
   /** markPaid or refund if still pending, then the Arkiv receipt if there is none. */
@@ -160,6 +207,7 @@ export function directPayouts(cfg: DirectConfig) {
     if (r.status === "paid" || r.status === "refunded") return { stage: r.receiptKey ? r.status : "receipt-pending", orderId, receiptKey: r.receiptKey };
     if (r.status !== "pending") return { stage: "review-failed", orderId, reason: r.check.ok ? r.status : r.check.reason };
     if (!r.check.ok) return { stage: "review-failed", orderId, reason: r.check.reason };
+    if (viaP2p(r.bill)) return advanceP2p(digest, orderId, r.check.payoutRef);
     // getOrder is null until the recipient finishes the widget; a Transak failure throws, so it shows instead of "waiting".
     const order = (await transak.getOrder(orderId)) as null | (Order & { fiatAmount?: number; fiatCurrency?: string });
     if (!order) return { stage: "awaiting-widget", orderId };
@@ -196,4 +244,21 @@ export function nextStep(order: Order, log: DepositEntry[], sellEth: string): St
   if (order.cryptoAmount !== undefined && Number(order.cryptoAmount) !== Number(sellEth))
     return { kind: "amount-mismatch", reason: `Transak asks for ${order.cryptoAmount} ETH, but this provider sells ${sellEth}.` };
   return { kind: "send", to };
+}
+
+type P2pStep = { kind: "paid" } | { kind: "refund"; reason: string } | { kind: "deliver" }
+  | { kind: "awaiting-merchant" | "upi-sent" | "upi-uncertain" | "merchant-paying" | "disputed" };
+
+/** What to do with a P2P.me order, given the journal. Pure, so the money rule is tested on its own. */
+export function nextP2pStep(order: Pick<P2pOrder, "status" | "disputeStatus">, log: DepositEntry[]): P2pStep {
+  if (order.status === "completed") return { kind: "paid" };
+  if (order.status === "cancelled") return { kind: "refund", reason: "P2P.me order cancelled" };
+  if (order.disputeStatus === "open") return { kind: "disputed" };
+  if (order.status === "placed") return { kind: "awaiting-merchant" };
+  // "paid" means the UPI ID is with the merchant, who now sends the INR.
+  if (order.status === "paid") return { kind: "merchant-paying" };
+  if (log.some((e) => e.phase === "upi-sent")) return { kind: "upi-sent" };
+  // An intent without "upi-sent" means the hand-over may be in flight: never send it blind.
+  if (log.some((e) => e.phase === "upi-intent")) return { kind: "upi-uncertain" };
+  return { kind: "deliver" };
 }

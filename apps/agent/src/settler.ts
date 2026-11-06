@@ -4,7 +4,7 @@ import { createPublicClient, createWalletClient, http, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { ensChain, GHAR_VAULT, gharVaultAbi, settlementChain } from "@ghar/shared";
 import { arkivClient } from "@ghar/arkiv";
-import { DEPOSIT_JOURNAL, directPayouts } from "./direct.ts";
+import { DEPOSIT_JOURNAL, directPayouts, viaP2p } from "./direct.ts";
 
 const env = (k: string) => process.env[k] || (() => { throw new Error(`${k} is not set`); })();
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
@@ -46,6 +46,8 @@ async function settle(digest: Hex) {
     return report(digest, await direct.finish(digest, { ok: false, reason: r.check.reason }));
   }
   log(`[ENS] ${r.payee} payoutRef=${r.check.payoutRef}`);
+  // The UPI ID comes from the friend, so an INR payout starts and moves from the claim page.
+  if (viaP2p(r.bill)) return log(`skip ${digest.slice(0, 10)}: INR, paid out through P2P.me from the claim page`);
   let opened;
   try {
     opened = await direct.start(digest);
