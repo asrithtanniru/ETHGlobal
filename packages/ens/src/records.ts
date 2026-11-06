@@ -26,12 +26,15 @@ const resolverAbi = parseAbi([
   "function multicall(bytes[] data)",
 ]);
 
-/** Read both payee keys through the library Universal Resolver. */
-export async function getVerifiedPayee(client: PublicClient, payee: string): Promise<VerifiedPayee> {
+/**
+ * Read both payee keys through the library Universal Resolver.
+ * `strict` throws on resolver and gateway failures, which viem otherwise reports as an empty record.
+ */
+export async function getVerifiedPayee(client: PublicClient, payee: string, { strict = false } = {}): Promise<VerifiedPayee> {
   const name = normalize(payee);
   const [payoutRef, biller] = await Promise.all([
-    client.getEnsText({ name, key: PAYOUT_KEY }),
-    client.getEnsText({ name, key: BILLER_KEY }),
+    client.getEnsText({ name, key: PAYOUT_KEY, strict }),
+    client.getEnsText({ name, key: BILLER_KEY, strict }),
   ]);
   if (!payoutRef || !biller || !isAddress(biller)) throw new Error(`missing payee records: ${name}`);
   return { name, payoutRef, biller };

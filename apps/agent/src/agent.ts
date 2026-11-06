@@ -8,6 +8,7 @@ import { ensChain, GHAR_VAULT, gharVaultAbi, PAYEE_BOOK_PARENT, settlementChain,
 import { buildPayeeName, getVerifiedPayee } from "@ghar/ens";
 import { arkivClient, checkBill, openBills, toVaultBill, type InboxBill } from "@ghar/arkiv";
 import { decide } from "./decide.ts";
+import { loadHolds, parseDigests, recordHold } from "./holds.ts";
 import { groqEndpoints, parseKeys } from "./llm.ts";
 import { llmReviewer, noReview, REVIEW_FAILED, reviewBill, vaultPastAmounts } from "./reviewer.ts";
 
@@ -23,11 +24,12 @@ const wallet = createWalletClient({ chain: settlementChain, transport, account }
 const ens = createPublicClient({ chain: ensChain, transport: http(process.env.SEPOLIA_RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com") });
 const arkiv = arkivClient();
 const vault = { address: GHAR_VAULT, abi: gharVaultAbi } as const;
-const done = new Set<string>(); // digests already settled or refused for good this run
+// Bills the sender checked by hand after a hold. Every other rule still applies to them.
+const approved = parseDigests(process.env.APPROVED_DIGESTS);
+const HOLDS_FILE = ".agent-holds";
+const done = loadHolds(HOLDS_FILE, approved); // digests settled or refused for good, plus AI holds from any run
 const keys = parseKeys(process.env.GROQ_API_KEYS);
 const reviewer = keys.length ? llmReviewer({ endpoints: groqEndpoints(keys), pastAmounts: vaultPastAmounts(chain, sender) }) : noReview;
-// Invoice refs the sender checked by hand after a hold. Every other rule still applies to them.
-const approved = new Set(parseKeys(process.env.APPROVED_INVOICES));
 
 const read = (functionName: never, args: never) => chain.readContract({ ...vault, functionName, args }) as Promise<unknown>;
 
@@ -67,12 +69,15 @@ async function tick() {
         log(`hold ${bill.invoiceRef}: ${d.reason}`);
         continue;
       }
-      if (!approved.has(bill.invoiceRef)) {
+      if (!approved.has(bill.digest)) {
         const verdict = await reviewBill(reviewer, bill);
         if (verdict.hold) {
-          log(`hold ${bill.invoiceRef}: ${verdict.reason}`);
-          // A model hold stands until the sender acts. A failed review is retried next tick.
-          if (verdict.reason !== REVIEW_FAILED) done.add(bill.digest);
+          log(`hold ${bill.invoiceRef} ${bill.digest}: ${verdict.reason}`);
+          // A model hold stands until the sender acts, across restarts. A failed review is retried next tick.
+          if (verdict.reason !== REVIEW_FAILED) {
+            recordHold(HOLDS_FILE, bill.digest);
+            done.add(bill.digest);
+          }
           continue;
         }
       }
@@ -83,6 +88,7 @@ async function tick() {
 
 log(`agent ${account.address} paying for ${sender}: ${tags.join(", ")}`);
 log(keys.length ? `AI review on, ${keys.length} Groq key(s)` : "AI review OFF: GROQ_API_KEYS is not set");
+if (done.size) log(`${done.size} bill(s) on hold from earlier runs. Add a digest to APPROVED_DIGESTS to release it.`);
 for (;;) {
   await tick().catch((e) => log("tick failed:", (e as Error).message.split("\n")[0]));
   await new Promise((r) => setTimeout(r, Number(process.env.POLL_SECONDS ?? 30) * 1000));

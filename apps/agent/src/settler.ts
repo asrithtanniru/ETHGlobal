@@ -8,7 +8,7 @@ import { arkivClient, billByDigest, receiptForDigest } from "@ghar/arkiv";
 import { postReceipt } from "@ghar/arkiv/write";
 // @ts-expect-error plain JS helper from the payout spike
 import * as transak from "../../../ghar-payout-spike/adapter/transak.mjs";
-import { billMatchesPayee, checkPayout } from "./payout-check.ts";
+import { billMatchesPayee, checkPayout, isMissingPayee } from "./payout-check.ts";
 
 const env = (k: string) => process.env[k] || (() => { throw new Error(`${k} is not set`); })();
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
@@ -56,12 +56,12 @@ async function payout(digest: Hex, usdt: string): Promise<{ ok: true; ref: strin
   }
 }
 
-/** Missing records refund the payout. Any other failure throws, so the poll retries it. */
+/** Missing records refund the payout, which can't be undone. Any other failure throws, so the poll retries it. */
 async function readPayee(name: string): Promise<VerifiedPayee | undefined> {
   try {
-    return await getVerifiedPayee(ens as never, name);
+    return await getVerifiedPayee(ens as never, name, { strict: true });
   } catch (e) {
-    if ((e as Error).message.startsWith("missing payee records")) return undefined;
+    if (isMissingPayee(e)) return undefined;
     throw e;
   }
 }
