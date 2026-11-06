@@ -1,0 +1,150 @@
+"use client";
+
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { namehash } from "viem/ens";
+import type { Address, Hex } from "viem";
+import { useQuery } from "@tanstack/react-query";
+import { PAYEE_BOOK_PARENT, type VerifiedPayee } from "@ghar/shared";
+import { buildPayeeName, getVerifiedPayee } from "@ghar/ens";
+import { useConnection } from "wagmi";
+import { ConnectButtons, PageHead, RequireWallet, TxStatus } from "@/components/app/AppShell";
+import { Lines } from "@/components/ui";
+import { useTx } from "@/components/app/useTx";
+import { chainClient, ensClient, explain, parseUsdt, period, short, usdt, vault, vaultEvents } from "@/lib/chain";
+import { nameFor, rememberName } from "@/lib/names";
+
+export default function Payees() {
+  return (
+    <>
+      <PageHead eyebrow="Payees" title={<Lines>{["Only accounts a provider", "verified can be paid."]}</Lines>}>
+        Each payee is a name under {PAYEE_BOOK_PARENT}. Ghar reads its payout account and biller wallet from ENS, so neither can be typed in or swapped.
+      </PageHead>
+      <Suspense><AddPayee /></Suspense>
+      <RequireWallet>{(a) => <Book address={a} />}</RequireWallet>
+    </>
+  );
+}
+
+type Row = { node: Hex; biller: Address; perPayment: bigint; perPeriod: bigint; period: bigint; available: bigint };
+
+function Book({ address }: { address: Address }) {
+  const list = useQuery({
+    queryKey: ["payees", address],
+    queryFn: async (): Promise<Row[]> => {
+      const [set, removed] = await Promise.all([vaultEvents("PayeeSet", { sender: address }), vaultEvents("PayeeRemoved", { sender: address })]);
+      const alive = new Map<Hex, boolean>();
+      for (const e of [...set.map((e) => ({ e, on: true })), ...removed.map((e) => ({ e, on: false }))].sort((a, b) => Number(a.e.blockNumber - b.e.blockNumber) || a.e.logIndex - b.e.logIndex)) {
+        const node = (e.e.args as { payee: Hex }).payee;
+        alive.set(node, e.on);
+      }
+      const nodes = [...alive].filter(([, on]) => on).map(([n]) => n);
+      return Promise.all(nodes.map(async (node) => {
+        const [biller, lim, available] = await Promise.all([
+          chainClient.readContract({ ...vault, functionName: "billerOf", args: [address, node] }),
+          chainClient.readContract({ ...vault, functionName: "payeeOf", args: [address, node] }),
+          chainClient.readContract({ ...vault, functionName: "availableToPayee", args: [address, node] }),
+        ]);
+        const [perPayment, perPeriod, period] = lim as readonly [bigint, bigint, bigint, bigint, bigint];
+        return { node, biller: biller as Address, perPayment, perPeriod, period, available: available as bigint };
+      }));
+    },
+  });
+  useEffect(() => {
+    const again = () => list.refetch();
+    window.addEventListener("ghar:payees", again);
+    return () => window.removeEventListener("ghar:payees", again);
+  }, [list.refetch]);
+  return (
+    <>
+      <section className="band band--rule">
+        <div className="frame">
+          <div className="panel" style={{ background: "none" }}><h2 className="title-l">In your vault</h2></div>
+          {list.isLoading && <p className="empty">Reading payees from Whitechain<span className="dots" /></p>}
+          {list.error && <p className="empty msg--err">{explain(list.error)}</p>}
+          {list.data?.length === 0 && <p className="empty">No payees yet. Add one above.</p>}
+          {list.data?.map((r) => <PayeeRow key={r.node} r={r} address={address} onDone={() => list.refetch()} />)}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function PayeeRow({ r, address, onDone }: { r: Row; address: Address; onDone: () => void }) {
+  const tx = useTx(onDone);
+  return (
+    <div className="list-row">
+      <div>
+        <div className="title">{nameFor(r.node) ?? <span className="mono">{short(r.node)}</span>}</div>
+        <div className="mono" style={{ marginTop: "0.6rem" }}>biller {short(r.biller)}</div>
+      </div>
+      <div className="body-l">
+        Up to {usdt(r.perPayment)} per bill, {usdt(r.perPeriod)} per {period(r.period)} · <span style={{ color: "var(--ink)" }}>{usdt(r.available)} USDT</span> payable now
+        <TxStatus state={tx.state} />
+      </div>
+      <button className="btn btn--ghost" disabled={tx.busy} onClick={() => tx.run([{ ...vault, functionName: "removePayee", args: [r.node], account: address }] as never, "Payee removed")}>Remove</button>
+    </div>
+  );
+}
+
+function AddPayee() {
+  const { address, status } = useConnection();
+  const params = useSearchParams();
+  const [tag, setTag] = useState(params.get("tag") ?? "");
+  const [found, setFound] = useState<VerifiedPayee | null>(null);
+  const [lookErr, setLookErr] = useState("");
+  const [looking, setLooking] = useState(false);
+  const [per, setPer] = useState("");
+  const [cap, setCap] = useState("");
+  const [days, setDays] = useState("30");
+  const tx = useTx(() => { window.dispatchEvent(new Event("ghar:payees")); setFound(null); });
+  useEffect(() => { setFound(null); setLookErr(""); }, [tag]);
+
+  async function lookUp() {
+    setLooking(true); setLookErr("");
+    try {
+      const p = await getVerifiedPayee(ensClient as never, buildPayeeName(PAYEE_BOOK_PARENT, tag));
+      setFound(p); rememberName(namehash(p.name), p.name);
+    } catch (e) {
+      setLookErr(/missing payee records/.test(String(e)) ? "No verified records on that name yet. The provider writes them after verifying the account." : explain(e));
+    } finally { setLooking(false); }
+  }
+  const pp = parseUsdt(per), pc = parseUsdt(cap), d = Number(days);
+  const ok = found && pp && pc && Number.isInteger(d) && d > 0 && address && status === "connected";
+  const perOverCap = pp !== undefined && pc !== undefined && pp > pc;
+  return (
+    <section className="band band--rule">
+      <div className="frame split">
+        <form className="panel" onSubmit={(e) => { e.preventDefault(); if (tag.trim()) lookUp(); }}>
+          <h2 className="title-l">Add a payee</h2>
+          <div className="field">
+            <label htmlFor="tag">Bill type</label>
+            <input id="tag" placeholder="rent" value={tag} onChange={(e) => setTag(e.target.value)} />
+            <span className="hint">{tag.trim() ? (() => { try { return buildPayeeName(PAYEE_BOOK_PARENT, tag); } catch (e) { return String((e as Error).message); } })() : `Becomes tag.${PAYEE_BOOK_PARENT}`}</span>
+          </div>
+          <div className="form-actions"><button className="btn" disabled={!tag.trim() || looking}>{looking ? "Reading ENS" : "Look up"}</button></div>
+          <p className={lookErr ? "msg msg--err" : "msg"}>{lookErr}</p>
+        </form>
+        <form className="vl panel" onSubmit={(e) => {
+          e.preventDefault();
+          if (ok) tx.run([{ ...vault, functionName: "setPayee", args: [namehash(found.name), found.biller, pp, pc, BigInt(d * 86400)], account: address }] as never, `${found.name} added`);
+        }}>
+          <h2 className="title-l">{found ? found.name : "Verified records"}</h2>
+          {found ? (
+            <dl className="kv">
+              <dt>payout</dt><dd>{found.payoutRef}</dd>
+              <dt>biller</dt><dd>{found.biller}</dd>
+            </dl>
+          ) : (
+            <p className="body-l" style={{ marginTop: "1.2rem" }}>Look up a bill type to read its payout account and biller from ENS on Sepolia.</p>
+          )}
+          <div className="field"><label htmlFor="per">Cap per bill (USDT)</label><input id="per" inputMode="decimal" placeholder="150" value={per} onChange={(e) => setPer(e.target.value)} disabled={!found} /></div>
+          <div className="field"><label htmlFor="cap">Cap per period (USDT)</label><input id="cap" inputMode="decimal" placeholder="300" value={cap} onChange={(e) => setCap(e.target.value)} disabled={!found} />{perOverCap && <span className="hint">The per-period cap limits each bill too, so bills above {cap} USDT can't be paid.</span>}</div>
+          <div className="field"><label htmlFor="days">Period (days)</label><input id="days" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} disabled={!found} /></div>
+          <div className="form-actions">{address ? <button className="btn" disabled={!ok || tx.busy}>Add to vault</button> : found && <ConnectButtons compact />}</div>
+          <TxStatus state={tx.state} />
+        </form>
+      </div>
+    </section>
+  );
+}

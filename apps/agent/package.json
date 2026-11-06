@@ -1,0 +1,20 @@
+{
+  "name": "@ghar/agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ghar agent and settler: Arkiv bills to vault payments, and payouts to Arkiv receipts.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "agent": "node --env-file=.env src/agent.ts",
+    "settler": "node --env-file=.env src/settler.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@ghar/arkiv": "*",
+    "@ghar/ens": "*",
+    "@ghar/shared": "*",
+    "viem": "^2.57.16"
+  }
+}

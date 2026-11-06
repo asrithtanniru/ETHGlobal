@@ -1,0 +1,24 @@
+{
+  "name": "@ghar/arkiv",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bill inbox and receipts on Arkiv: GharBill and GharReceipt entities, signed-bill checks and guarded writes.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./write": "./src/write.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test test/*.test.ts",
+    "post-bill": "node --env-file=.env scripts/post-bill.ts",
+    "read-bills": "node --env-file-if-exists=.env scripts/read-bills.ts"
+  },
+  "dependencies": {
+    "@arkiv-network/sdk": "^1.0.1",
+    "@ghar/ens": "*",
+    "@ghar/shared": "*",
+    "viem": "^2.57.16"
+  }
+}
