@@ -2,11 +2,13 @@
 // -> GharReceipt on Arkiv. Needs a vault deployed with settlement, and the vault's provider key.
 import { createPublicClient, createWalletClient, formatUnits, http, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { GHAR_VAULT, gharVaultAbi, settlementChain, USDT } from "@ghar/shared";
+import { ensChain, GHAR_VAULT, gharVaultAbi, settlementChain, USDT, type VerifiedPayee } from "@ghar/shared";
+import { getVerifiedPayee } from "@ghar/ens";
 import { arkivClient, billByDigest, receiptForDigest } from "@ghar/arkiv";
 import { postReceipt } from "@ghar/arkiv/write";
 // @ts-expect-error plain JS helper from the payout spike
 import * as transak from "../../../ghar-payout-spike/adapter/transak.mjs";
+import { billMatchesPayee, checkPayout, isMissingPayee } from "./payout-check.ts";
 
 const env = (k: string) => process.env[k] || (() => { throw new Error(`${k} is not set`); })();
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
@@ -18,6 +20,7 @@ const transport = http(process.env.WHITECHAIN_RPC_URL ?? "https://rpc.testnet.wh
 const chain = createPublicClient({ chain: settlementChain, transport });
 const wallet = createWalletClient({ chain: settlementChain, transport, account });
 const vault = { address: GHAR_VAULT, abi: gharVaultAbi } as const;
+const ens = createPublicClient({ chain: ensChain, transport: http(process.env.SEPOLIA_RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com") });
 const arkiv = arkivClient();
 const explorer = settlementChain.blockExplorers?.default.url;
 
@@ -53,16 +56,31 @@ async function payout(digest: Hex, usdt: string): Promise<{ ok: true; ref: strin
   }
 }
 
-async function settle(digest: Hex, amount: bigint) {
+/** Missing records refund the payout, which can't be undone. Any other failure throws, so the poll retries it. */
+async function readPayee(name: string): Promise<VerifiedPayee | undefined> {
+  try {
+    return await getVerifiedPayee(ens as never, name, { strict: true });
+  } catch (e) {
+    if (isMissingPayee(e)) return undefined;
+    throw e;
+  }
+}
+
+async function settle(digest: Hex, amount: bigint, sender: Address, node: Hex) {
   const usdt = formatUnits(amount, USDT.decimals);
   const [, , status] = await chain.readContract({ ...vault, functionName: "payoutOf", args: [digest] }) as readonly [Address, bigint, number, bigint];
   if (status !== 1) return log(`skip ${digest.slice(0, 10)}: not pending`);
   if (await receiptForDigest(arkiv, digest, account.address)) return log(`skip ${digest.slice(0, 10)}: receipt exists`);
 
-  const bill = await billByDigest(arkiv, digest);
-  if (!bill) log(`no Arkiv bill found for ${digest.slice(0, 10)}; the receipt will not link to one`);
+  // Only the wallet the sender accepted counts, so a stranger's post can't claim this digest.
+  const vaultBiller = await chain.readContract({ ...vault, functionName: "billerOf", args: [sender, node] });
+  const bill = await billByDigest(arkiv, digest, vaultBiller);
+  const payee = bill && billMatchesPayee(bill.payee, node) ? await readPayee(bill.payee) : undefined;
+  const check = checkPayout(node, bill, payee, vaultBiller);
+  if (check.ok) log(`[ENS] ${payee?.name} payoutRef=${payee?.payoutRef}`);
+  else log(`refusing ${digest.slice(0, 10)}: ${check.reason}`);
 
-  const out = await payout(digest, usdt);
+  const out = check.ok ? await payout(digest, usdt) : ({ ok: false, reason: check.reason } as const);
   const hash = await wallet.writeContract(out.ok
     ? { ...vault, functionName: "markPaid", args: [digest, out.ref] }
     : { ...vault, functionName: "refund", args: [digest, out.reason] });
@@ -89,7 +107,7 @@ for (;;) {
     const to = from + 9_999n < head ? from + 9_999n : head; // the RPC caps log ranges at 10,000 blocks
     if (to >= from) {
       const events = await chain.getContractEvents({ ...vault, eventName: "PayoutRequested", fromBlock: from, toBlock: to });
-      for (const e of events) await settle(e.args.digest!, e.args.amount!);
+      for (const e of events) await settle(e.args.digest!, e.args.amount!, e.args.sender!, e.args.payee!);
       from = to + 1n;
     }
   } catch (e) {
