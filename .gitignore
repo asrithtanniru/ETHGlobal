@@ -10,6 +10,7 @@ node_modules/
 dist/
 .next/
 out/
+*.tsbuildinfo
 
 # Foundry
 contracts/cache/
@@ -19,4 +20,5 @@ contracts/broadcast/**/dry-run/
 
 # Logs and OS files
 *.log
+.arkiv-journal.jsonl
 .DS_Store
