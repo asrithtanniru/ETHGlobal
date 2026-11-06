@@ -28,7 +28,7 @@ async function userIp() {
   return (await (await fetch('https://api.ipify.org')).text()).trim();
 }
 
-export async function createSellWidget({ partnerOrderId, cryptoAmount, email }) {
+export async function createSellWidget({ partnerOrderId, cryptoAmount, email, fiatCurrency = 'USD', redirectURL }) {
   const r = await fetch(`${GW}/auth/session`, {
     method: 'POST',
     headers: {
@@ -39,8 +39,9 @@ export async function createSellWidget({ partnerOrderId, cryptoAmount, email }) 
       widgetParams: {
         apiKey: KEY, referrerDomain: process.env.REFERRER_DOMAIN || 'localhost',
         productsAvailed: 'SELL', cryptoCurrencyCode: 'ETH', network: 'ethereum',
-        cryptoAmount, fiatCurrency: 'USD', partnerOrderId,
+        cryptoAmount, fiatCurrency, partnerOrderId,
         ...(email ? { email } : {}),
+        ...(redirectURL ? { redirectURL } : {}),
       },
     }),
   });

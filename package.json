@@ -14,7 +14,8 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "demo:merchant": "python3 -m http.server 4000 -d examples/merchant-demo"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -1,7 +1,7 @@
 import { BaseError, ContractFunctionRevertedError, createPublicClient, formatUnits, http, parseUnits, type Address, type Hex } from "viem";
 import { createConfig } from "wagmi";
 import { injected } from "wagmi/connectors";
-import { GHAR_VAULT, USDT, ensChain, gharVaultAbi, settlementChain } from "@ghar/shared";
+import { GHAR_VAULT, GHAR_VAULT_DEPLOY_BLOCK, USDT, ensChain, gharVaultAbi, settlementChain } from "@ghar/shared";
 
 const SEPOLIA_RPC = process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com";
 const WHITECHAIN_RPC = process.env.NEXT_PUBLIC_WHITECHAIN_RPC_URL ?? "https://rpc.testnet.whitechain.io";
@@ -18,8 +18,7 @@ export const ensClient = createPublicClient({ chain: ensChain, transport: http(S
 
 export const vault = { address: GHAR_VAULT, abi: gharVaultAbi, chainId: settlementChain.id } as const;
 
-/** GharVault deployment block (contracts/broadcast/Deploy.s.sol/1874/run-latest.json). */
-export const DEPLOY_BLOCK = 0xbc7731n;
+export const DEPLOY_BLOCK = GHAR_VAULT_DEPLOY_BLOCK;
 /** Whitechain RPC rejects eth_getLogs over more than 10,000 blocks. */
 const LOG_RANGE = 9_999n;
 
@@ -33,6 +32,17 @@ export async function vaultEvents(eventName: EventName, args?: Record<string, un
     ),
   );
   return chunks.flat();
+}
+
+/** Payees currently in a sender's vault, as namehashes, replaying PayeeSet and PayeeRemoved in order. */
+export async function activePayees(sender: Address): Promise<Hex[]> {
+  const [set, removed] = await Promise.all([vaultEvents("PayeeSet", { sender }), vaultEvents("PayeeRemoved", { sender })]);
+  const alive = new Map<Hex, boolean>();
+  for (const { e, on } of [...set.map((e) => ({ e, on: true })), ...removed.map((e) => ({ e, on: false }))]
+    .sort((a, b) => Number(a.e.blockNumber - b.e.blockNumber) || a.e.logIndex - b.e.logIndex)) {
+    alive.set((e.args as { payee: Hex }).payee, on);
+  }
+  return [...alive].filter(([, on]) => on).map(([n]) => n);
 }
 
 async function blockRanges() {

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildPayeeName, parsePayeeName, isExpired } from "../src/names.ts";
+import { buildPayeeName, parsePayeeName, payeeFamily, isExpired } from "../src/names.ts";
 import { isBillPayable } from "../src/guard.ts";
 
 describe("dynamic payee names", () => {
@@ -22,6 +22,17 @@ describe("dynamic payee names", () => {
     assert.throws(() => parsePayeeName("rent..eth"), /./);
     assert.equal(isExpired(1_000, 2_000), true);
     assert.equal(isExpired(2_000, 1_000), false);
+  });
+});
+
+describe("payee family", () => {
+  it("uses PAYEE_FAMILY and falls back to the demo family", () => {
+    const before = process.env.PAYEE_FAMILY;
+    delete process.env.PAYEE_FAMILY;
+    assert.equal(payeeFamily(), "gharfam.eth");
+    process.env.PAYEE_FAMILY = "priyafam.eth";
+    assert.equal(buildPayeeName(payeeFamily(), "clinic"), "clinic.priyafam.eth");
+    if (before === undefined) delete process.env.PAYEE_FAMILY; else process.env.PAYEE_FAMILY = before;
   });
 });
 

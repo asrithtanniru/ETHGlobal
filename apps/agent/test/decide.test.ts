@@ -20,6 +20,11 @@ test("ENS and the vault must agree on the biller", () => {
   assert.deepEqual(decide(bill, { ok: true }, biller, other), { pay: false, reason: "vault-biller-differs-from-ens" });
 });
 
+test("a payee the sender never added is reported as not in the vault", () => {
+  const none = { ...vault, biller: "0x0000000000000000000000000000000000000000" as const };
+  assert.deepEqual(decide(bill, { ok: true }, biller, none), { pay: false, reason: "not-in-vault" });
+});
+
 test("limits are checked before spending gas", () => {
   assert.equal((decide(bill, { ok: true }, biller, { ...vault, availableToAgent: 99n }) as { reason: string }).reason, "over-agent-grant");
   assert.equal((decide(bill, { ok: true }, biller, { ...vault, availableToPayee: 99n }) as { reason: string }).reason, "over-payee-cap");

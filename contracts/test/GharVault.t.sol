@@ -4,6 +4,8 @@ pragma solidity ^0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {GharVault} from "../src/GharVault.sol";
 
 contract TestUSDT is ERC20 {
@@ -813,5 +815,92 @@ contract GharVaultNomineeTest is Test {
             )
         );
         _nomineeWithdraw(1);
+    }
+}
+
+/// @dev Test USDT with EIP-3009 ReceiveWithAuthorization, checked the way the Whitechain token does:
+///      real EIP-712 signature, single-use nonce, time window, and only the payee may submit.
+contract TestUSDT3009 is TestUSDT, EIP712 {
+    bytes32 public constant RECEIVE_WITH_AUTHORIZATION_TYPEHASH = keccak256(
+        "ReceiveWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
+    );
+    mapping(address => mapping(bytes32 => bool)) public authorizationState;
+
+    constructor() EIP712("Tether USD", "1") {}
+
+    function receiveWithAuthorization(
+        address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce,
+        uint8 v, bytes32 r, bytes32 s
+    ) external {
+        require(to == msg.sender, "caller must be the payee");
+        require(block.timestamp > validAfter && block.timestamp < validBefore, "outside window");
+        require(!authorizationState[from][nonce], "authorization used");
+        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(RECEIVE_WITH_AUTHORIZATION_TYPEHASH, from, to, value, validAfter, validBefore, nonce)));
+        require(ECDSA.recover(digest, v, r, s) == from, "invalid signature");
+        authorizationState[from][nonce] = true;
+        _transfer(from, to, value);
+    }
+
+    function digestFor(address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce) external view returns (bytes32) {
+        return _hashTypedDataV4(keccak256(abi.encode(RECEIVE_WITH_AUTHORIZATION_TYPEHASH, from, to, value, validAfter, validBefore, nonce)));
+    }
+}
+
+contract GharVaultGaslessDepositTest is Test {
+    TestUSDT3009 internal usdt;
+    GharVault internal vault;
+    uint256 internal senderKey = 0xA11CE;
+    address internal sender = vm.addr(0xA11CE);
+    address internal relayer = makeAddr("relayer");
+
+    function setUp() public {
+        usdt = new TestUSDT3009();
+        vault = new GharVault(IERC20(address(usdt)), makeAddr("provider"));
+        usdt.mint(sender, 100e6);
+        vm.warp(1_800_000_000);
+    }
+
+    function _sign(uint256 value, bytes32 nonce) internal view returns (uint8 v, bytes32 r, bytes32 s) {
+        return vm.sign(senderKey, usdt.digestFor(sender, address(vault), value, 0, block.timestamp + 1 hours, nonce));
+    }
+
+    function test_RelayerDepositCreditsOnlyTheSigner() public {
+        (uint8 v, bytes32 r, bytes32 s) = _sign(25e6, bytes32(uint256(1)));
+        vm.expectEmit(address(vault));
+        emit GharVault.Deposited(sender, 25e6);
+        vm.prank(relayer);
+        vault.depositWithAuthorization(sender, 25e6, 0, block.timestamp + 1 hours, bytes32(uint256(1)), v, r, s);
+
+        assertEq(vault.balanceOf(sender), 25e6);
+        assertEq(vault.balanceOf(relayer), 0);
+        assertEq(usdt.balanceOf(address(vault)), 25e6);
+        assertEq(vault.lastActive(sender), block.timestamp);
+    }
+
+    function test_RevertWhen_AuthorizationIsReplayed() public {
+        (uint8 v, bytes32 r, bytes32 s) = _sign(10e6, bytes32(uint256(2)));
+        vault.depositWithAuthorization(sender, 10e6, 0, block.timestamp + 1 hours, bytes32(uint256(2)), v, r, s);
+        vm.expectRevert("authorization used");
+        vault.depositWithAuthorization(sender, 10e6, 0, block.timestamp + 1 hours, bytes32(uint256(2)), v, r, s);
+    }
+
+    function test_RevertWhen_RelayerChangesTheAmountOrSigner() public {
+        (uint8 v, bytes32 r, bytes32 s) = _sign(10e6, bytes32(uint256(3)));
+        vm.expectRevert("invalid signature");
+        vault.depositWithAuthorization(sender, 90e6, 0, block.timestamp + 1 hours, bytes32(uint256(3)), v, r, s);
+        vm.expectRevert("invalid signature");
+        vault.depositWithAuthorization(relayer, 10e6, 0, block.timestamp + 1 hours, bytes32(uint256(3)), v, r, s);
+    }
+
+    function test_RevertWhen_SubmittedStraightToTheToken() public {
+        (uint8 v, bytes32 r, bytes32 s) = _sign(10e6, bytes32(uint256(4)));
+        vm.prank(relayer);
+        vm.expectRevert("caller must be the payee");
+        usdt.receiveWithAuthorization(sender, address(vault), 10e6, 0, block.timestamp + 1 hours, bytes32(uint256(4)), v, r, s);
+    }
+
+    function test_RevertWhen_ZeroAmount() public {
+        vm.expectRevert(GharVault.ZeroAmount.selector);
+        vault.depositWithAuthorization(sender, 0, 0, block.timestamp + 1 hours, bytes32(0), 0, 0, 0);
     }
 }

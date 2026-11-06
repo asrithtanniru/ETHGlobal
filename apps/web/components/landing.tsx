@@ -81,7 +81,7 @@ function Hero() {
       <section className="band band--rule band--intro band--heroot">
         <div className="frame hero__foot">
           <p className="body-l hero__lede" data-load="lede">
-            Ghar holds your USDT in an onchain vault and pays your family&apos;s bills, only to accounts a licensed provider verified
+            Kin holds your USDT in an onchain vault and pays your family&apos;s bills, only to accounts a licensed provider verified
           </p>
           <div className="hero__ctas">
             <Link href="/app" className="btn" data-load="cta">Open the vault</Link>
@@ -101,7 +101,7 @@ function Problem() {
           <Lines>{["Bank details can be forged.", "Your payee book can't be."]}</Lines>
         </h2>
         <p className="body-l cell vl problem__lede" data-fade data-delay={0.2}>
-          A message saying &ldquo;we changed our account, pay here&rdquo; is all it takes to redirect a transfer. Ghar only pays accounts a licensed provider verified, so a forged request has nowhere to send the money
+          A message saying &ldquo;we changed our account, pay here&rdquo; is all it takes to redirect a transfer. Kin only pays accounts a licensed provider verified, so a forged request has nowhere to send the money
         </p>
       </div>
     </section>
@@ -231,7 +231,7 @@ function Footer() {
           <div className="foot__brand" data-footlogo>
             <Logo />
             <p className="tag">Bills back home, paid from stablecoins</p>
-            <p className="copy">© 2026 Ghar · MIT</p>
+            <p className="copy">© 2026 Kin · MIT</p>
           </div>
           {cols.map(([h, links], i) => (
             <div key={h} className="vl" data-fade data-delay={0.1 * i}>

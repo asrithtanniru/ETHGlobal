@@ -38,4 +38,22 @@ export const GharReceipt = defineSchema("ghar_receipt", {
   providerRef: str(),
   /** Delivered amount as the provider reported it, for example "40.10 USD". */
   fiat: str().optional(),
+  /** The ENS ghar.payoutRef the provider paid against. Receipts from before this column have none. */
+  payoutRef: str().optional(),
+});
+
+/**
+ * One chat exchange (the sender's message and the assistant's reply), written by Ghar's chat writer.
+ * `body` is AES-256-GCM ciphertext: only the indexed columns below are public.
+ */
+export const GharChat = defineSchema("ghar_chat", {
+  /** Lowercase address of the sender who owns the conversation. */
+  owner: str().indexed(),
+  /** Conversation id (a UUID). */
+  thread: str().indexed(),
+  /** Position in the conversation; 0 starts a thread, which is how the history list is built. */
+  seq: u64().indexed(),
+  /** Unix milliseconds, for ordering. */
+  at: u64().indexed(),
+  body: bytes(),
 });

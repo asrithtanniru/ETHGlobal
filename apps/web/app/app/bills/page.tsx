@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { PAYEE_BOOK_PARENT } from "@ghar/shared";
 import { PageHead } from "@/components/app/AppShell";
 import { short, usdt, when } from "@/lib/chain";
+import { reason } from "@/lib/reasons";
 
 type Row = {
   key: string; creator: string; invoiceRef: string; currency: string; amount: string; dueDate: number; note?: string;
@@ -13,19 +15,13 @@ type Row = {
 };
 type Inbox = { payee: { name: string; biller: string; payoutRef: string }; bills: Row[] };
 
-const REASONS: Record<string, string> = {
-  "wrong-biller": "Posted by a wallet that isn't this payee's biller",
-  "wrong-signature": "Signed by the wrong wallet",
-  "bad-signature": "The signature can't be read",
-  "digest-mismatch": "The amount or date doesn't match what was signed",
-  "past-due": "Past its due date",
-  "payee-mismatch": "Posted for a different payee",
-  revoked: "This payee was revoked",
-  expired: "This payee's name expired",
-};
 
 export default function Bills() {
-  const [input, setInput] = useState(`rent.${PAYEE_BOOK_PARENT}`);
+  return <Suspense><BillsInbox /></Suspense>;
+}
+
+function BillsInbox() {
+  const [input, setInput] = useState(useSearchParams().get("payee") ?? `rent.${PAYEE_BOOK_PARENT}`);
   const [payee, setPayee] = useState(input);
   const q = useQuery({
     queryKey: ["inbox", payee],
@@ -66,7 +62,7 @@ export default function Bills() {
               </div>
               <div className="body-l">
                 <span className={`tag-pill ${b.check.ok ? "tag-pill--on" : ""}`}>{b.check.ok ? "accepted" : "ignored"}</span>{" "}
-                {b.check.ok ? <>due {when(b.dueDate)}</> : REASONS[b.check.reason] ?? b.check.reason}
+                {b.check.ok ? <>due {when(b.dueDate)}</> : reason(b.check.reason)}
                 <div className="mono" style={{ marginTop: "0.4rem" }}>from {short(b.creator)}{b.note ? ` · ${b.note}` : ""}</div>
               </div>
               {b.receiptKey ? <Link className="link" href={`/receipt/${b.receiptKey}`}>{b.receiptStatus} receipt <span aria-hidden="true">→</span></Link> : <span />}

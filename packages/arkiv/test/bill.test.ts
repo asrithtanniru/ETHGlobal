@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { createPublicClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { GHAR_VAULT, gharVaultAbi, settlementChain } from "@ghar/shared";
-import { billDigest, billTypedData, checkBill, toVaultBill, type InboxBill } from "../src/bill.ts";
+import { billDigest, billEntity, billTypedData, checkBill, toVaultBill, type InboxBill } from "../src/bill.ts";
+import { str } from "@arkiv-network/sdk/schema";
+import { toReceipt } from "../src/read.ts";
 
 // Throwaway keys, used only to sign in this test.
 const biller = privateKeyToAccount("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d");
@@ -43,4 +45,22 @@ test("digest matches GharVault.billDigest on Whitechain", { skip: process.env.OF
   const client = createPublicClient({ chain: settlementChain, transport: http("https://rpc.testnet.whitechain.io") });
   const onchain = await client.readContract({ address: GHAR_VAULT, abi: gharVaultAbi, functionName: "billDigest", args: [toVaultBill(input)] });
   assert.equal(onchain, billDigest(input));
+});
+
+test("a receipt shows the payout reference, and older receipts without one still read", () => {
+  const v = <T>(value: T) => ({ value });
+  const row = {
+    $key: "0x01", $creator: "0x0000000000000000000000000000000000000001", $expiresAt: 1n, digest: v("0x02"), billKey: v("0x03"),
+    payee: v("rent.gharfam.eth"), status: v("paid"), settlementTx: v("0x04"), providerRef: v("order-1"),
+  } as Parameters<typeof toReceipt>[0];
+  assert.equal(toReceipt({ ...row, payoutRef: v("demo:acct-rent-001") }).payoutRef, "demo:acct-rent-001");
+  assert.equal(toReceipt(row).payoutRef, undefined);
+});
+
+test("billEntity carries the digest the vault computes and a readonly flag", async () => {
+  const b = await bill();
+  const { values, options } = billEntity({ ...input, currency: "INR" }, b.signature);
+  assert.deepEqual(values.digest, str(billDigest(input)));
+  assert.equal("note" in values, false);
+  assert.equal(options.flags.readonly, true);
 });

@@ -4,8 +4,8 @@
 import { createPublicClient, createWalletClient, http, parseUnits, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { namehash } from "viem/ens";
-import { GHAR_VAULT, PAYEE_BOOK_PARENT, USDT, gharVaultAbi, settlementChain } from "@ghar/shared";
-import { buildPayeeName, getVerifiedPayee } from "../src/index.ts";
+import { GHAR_VAULT, USDT, gharVaultAbi, settlementChain } from "@ghar/shared";
+import { buildPayeeName, getVerifiedPayee, payeeFamily } from "../src/index.ts";
 import { env, publicClient as ensClient } from "./client.ts";
 
 const [tag, capArg, daysArg = "30"] = process.argv.slice(2);
@@ -14,7 +14,7 @@ const cap = parseUnits(capArg, USDT.decimals);
 const days = Number(daysArg);
 if (cap <= 0n || !Number.isInteger(days) || days <= 0) throw new Error("cap and periodDays must be positive");
 
-const payee = await getVerifiedPayee(ensClient, buildPayeeName(PAYEE_BOOK_PARENT, tag));
+const payee = await getVerifiedPayee(ensClient, buildPayeeName(payeeFamily(), tag));
 
 // On testnet the deployer wallet plays the sender.
 const sender = privateKeyToAccount(env("DEPLOYER_PRIVATE_KEY") as Hex);

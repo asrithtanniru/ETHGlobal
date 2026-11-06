@@ -1,3 +1,5 @@
+import { ExpirationTime } from "@arkiv-network/sdk";
+import { bytes, str, u256, u64 } from "@arkiv-network/sdk/schema";
 import { hashTypedData, keccak256, recoverTypedDataAddress, stringToBytes, type Address, type Hex } from "viem";
 import { namehash } from "viem/ens";
 import { GHAR_VAULT, settlementChain } from "@ghar/shared";
@@ -53,6 +55,24 @@ export function billTypedData(b: BillInput, vault: Address = GHAR_VAULT) {
 }
 
 export const billDigest = (b: BillInput, vault: Address = GHAR_VAULT) => hashTypedData(billTypedData(b, vault));
+
+/**
+ * GharBill values and options for a signed bill. Create the entity from the biller's own wallet,
+ * so its $creator is the biller; the agent ignores bills from anyone else.
+ */
+export function billEntity(bill: BillInput & { currency: string; note?: string }, signature: Hex) {
+  const values = {
+    payee: str(bill.payee), invoiceRef: str(bill.invoiceRef), currency: str(bill.currency),
+    dueDate: u64(bill.dueDate), digest: str(billDigest(bill)), amount: u256(bill.amount), signature: bytes(signature),
+    ...(bill.note ? { note: str(bill.note) } : {}),
+  };
+  const options = {
+    // Kept 7 days past due so the family can still read it; the vault refuses it after the due date.
+    expiration: ExpirationTime.atDate(new Date(bill.dueDate * 1000 + 7 * 86_400_000), { atLeast: ExpirationTime.fromDays(1) }),
+    flags: { readonly: true },
+  };
+  return { values, options };
+}
 
 export type BillCheck = { ok: true } | { ok: false; reason: string };
 

@@ -8,10 +8,10 @@ export const USDT = {
 } as const satisfies { address: Address; decimals: number; symbol: string };
 
 /** GharVault on Whitechain Sepolia. */
-export const GHAR_VAULT = "0xA855E5b5152F7C7c824dc5c8EF034696a65587Ae" as const satisfies Address;
+export const GHAR_VAULT = "0x707447BCDD25651B0313c3542BB1a17fF2e1d29E" as const satisfies Address;
 
 /** Block GharVault was deployed in. Event queries start here. */
-export const GHAR_VAULT_DEPLOY_BLOCK = 12_351_281n;
+export const GHAR_VAULT_DEPLOY_BLOCK = 12_375_263n;
 
 /** ENSv2 deployment on Ethereum Sepolia, from docs.ens.domains/learn/deployments. */
 export const ENS_V2_SEPOLIA = {

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sunrise University · Fees</title>
+  <style>
+    body { margin: 0; font: 15px/1.5 Georgia, serif; background: #f6f1e7; color: #222; }
+    header { background: #1f3b5c; color: #fff; padding: 18px 24px; }
+    header h1 { margin: 0; font-size: 20px; font-weight: normal; }
+    main { max-width: 1100px; margin: 0 auto; padding: 24px; display: grid; grid-template-columns: 1fr 1.4fr; gap: 24px; }
+    section h2 { font-size: 17px; margin: 0 0 4px; }
+    section > p { margin: 0 0 14px; color: #555; }
+    #log { font: 12px ui-monospace, monospace; background: #fff; border: 1px solid #ddd; padding: 10px; min-height: 60px; white-space: pre-wrap; }
+    #enrolment { margin-top: 12px; padding: 10px 12px; background: #fff; border: 1px solid #ddd; }
+    @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header><h1>Sunrise University · Student fees</h1></header>
+  <main>
+    <section>
+      <h2>Student and family</h2>
+      <p>Spring term fees for your student account.</p>
+
+      <!-- ===== Kin integration: customer view ===== -->
+      <ghar-invoice payee="university.gharfam.eth" invoice="FEES-2026"></ghar-invoice>
+      <!-- ============================================ -->
+
+      <div id="enrolment">Enrolment: <b id="state">waiting for payment</b></div>
+    </section>
+    <section>
+      <h2>Bursar's office</h2>
+      <p>Every bill the university raised through Kin, with payouts, refunds and receipts.</p>
+
+      <!-- ===== Kin integration: merchant view ===== -->
+      <ghar-merchant payee="university.gharfam.eth"></ghar-merchant>
+      <!-- =========================================== -->
+
+      <h2 style="margin-top:20px">Status events</h2>
+      <div id="log"></div>
+    </section>
+  </main>
+
+  <!-- ===== Kin integration: script and status events (point src at your Kin host) ===== -->
+  <script src="http://localhost:3000/widget.js" defer></script>
+  <script>
+    // Fires when a bill's status changes (open, pending, paid, refunded): react like an order webhook.
+    document.addEventListener("ghar:status", (e) => {
+      const b = e.detail;
+      if (b.view !== "ghar-invoice") return;
+      document.getElementById("log").textContent += `${new Date().toLocaleTimeString()}  ${b.invoiceRef}  ${b.status}\n`;
+      if (b.invoiceRef === "FEES-2026") {
+        document.getElementById("state").textContent =
+          b.status === "paid" ? "confirmed, fees received" : b.status === "pending" ? "paid, settling" : b.status === "refunded" ? "payment refunded" : "waiting for payment";
+      }
+    });
+  </script>
+  <!-- ===================================================================================== -->
+</body>
+</html>

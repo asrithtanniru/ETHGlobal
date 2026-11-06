@@ -9,14 +9,23 @@ import { settlementChain } from "@ghar/shared";
 import { Icon, Logo } from "../ui";
 import { explorerTx, short, wagmiConfig } from "@/lib/chain";
 import type { TxState } from "./useTx";
+import { ChatHistory } from "./ChatHistory";
 
 const NAV = [
-  ["Overview", "/app", Icon.home],
+  ["New chat", "/app", Icon.chat],
+  ["Vault", "/app/vault", Icon.home],
   ["Payees", "/app/payees", Icon.payee],
   ["Bills", "/app/bills", Icon.receipt],
   ["Agent", "/app/agent", Icon.grant],
   ["Activity", "/app/activity", Icon.activity],
+  ["Pay with Direct", "/app/direct", Icon.bank],
   ["Nominee", "/app/nominee", Icon.nominee],
+] as const;
+
+/** Screens for the other parties, so a demo can show every role from one app. */
+const ROLES = [
+  ["Onboard a payee", "/app/onboard", Icon.signed],
+  ["Raise a bill", "/app/raise-bill", Icon.receipt],
 ] as const;
 
 /** Public reads a family member can use without a wallet; every other screen sits behind the sign-in. */
@@ -48,7 +57,7 @@ function SignIn() {
         <Logo />
         <div>
           <h1 className="signin__h">Open your vault</h1>
-          <p className="signin__p">Ghar reads your vault on Whitechain Sepolia and asks your wallet to sign every change.</p>
+          <p className="signin__p">Kin reads your vault on Whitechain Sepolia and asks your wallet to sign every change.</p>
           <div className="form-actions"><ConnectButtons /></div>
         </div>
         <p className="signin__alt">
@@ -73,6 +82,15 @@ function Dashboard({ children }: { children: ReactNode }) {
             </Link>
           ))}
         </nav>
+        <nav className="side__nav side__roles" aria-label="Provider and payee">
+          <p className="hist__h">Provider and payee</p>
+          {ROLES.map(([label, href, Glyph]) => (
+            <Link key={href} href={href} aria-current={path === href ? "page" : undefined}>
+              <Glyph /><span>{label}</span>
+            </Link>
+          ))}
+        </nav>
+        <ChatHistory />
         <Wallet />
       </aside>
       <main className="dash__main">{children}</main>
@@ -120,7 +138,13 @@ export function ConnectButtons({ compact = false }: { compact?: boolean }) {
       <button className="btn" disabled={!c || isPending || !hasWallet} onClick={() => c && connect({ connector: c, chainId: settlementChain.id })}>
         {isPending ? "Connecting" : "Connect wallet"}
       </button>
-      {!compact && error && <p className="msg msg--err">{error.message.split("\n")[0]}</p>}
+      {!compact && error && (
+        <p className="msg msg--err">
+          {/already pending/i.test(error.message)
+            ? "Your wallet already has a connection request open. Click the wallet's icon in the browser toolbar to approve or reject it."
+            : error.message.split("\n")[0]}
+        </p>
+      )}
     </>
   );
 }

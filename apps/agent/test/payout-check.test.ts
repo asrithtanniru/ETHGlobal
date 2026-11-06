@@ -13,11 +13,11 @@ const bill = { payee: name };
 const payee = { name, payoutRef: "demo:acct-rent-001", biller } as const;
 
 test("passes when bill, ENS and vault agree", () => {
-  assert.deepEqual(checkPayout(node, bill, payee, biller), { ok: true });
+  assert.deepEqual(checkPayout(node, bill, payee, biller), { ok: true, payoutRef: payee.payoutRef });
 });
 
 test("biller case does not matter", () => {
-  assert.deepEqual(checkPayout(node, bill, payee, biller.toLowerCase() as typeof biller), { ok: true });
+  assert.deepEqual(checkPayout(node, bill, payee, biller.toLowerCase() as typeof biller), { ok: true, payoutRef: payee.payoutRef });
 });
 
 test("refuses without an Arkiv bill from the accepted biller", () => {

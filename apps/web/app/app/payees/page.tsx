@@ -9,13 +9,13 @@ import { PAYEE_BOOK_PARENT, type VerifiedPayee } from "@ghar/shared";
 import { buildPayeeName, getVerifiedPayee } from "@ghar/ens";
 import { PageHead, RequireWallet, TxStatus } from "@/components/app/AppShell";
 import { useTx } from "@/components/app/useTx";
-import { chainClient, ensClient, explain, parseUsdt, period, short, usdt, vault, vaultEvents } from "@/lib/chain";
+import { activePayees, chainClient, ensClient, explain, parseUsdt, period, short, usdt, vault } from "@/lib/chain";
 import { nameFor, rememberName } from "@/lib/names";
 
 export default function Payees() {
   return (
     <div className="page">
-      <PageHead title="Payees">Each payee is a name under {PAYEE_BOOK_PARENT}. Ghar reads its payout account and biller wallet from ENS, so neither can be typed in or swapped.</PageHead>
+      <PageHead title="Payees">Each payee is a name under the family&apos;s ENS name. Kin reads its payout account and biller wallet from ENS, so neither can be typed in or swapped.</PageHead>
       <RequireWallet>{(a) => <div className="work"><Suspense><AddPayee address={a} /></Suspense><Book address={a} /></div>}</RequireWallet>
     </div>
   );
@@ -27,13 +27,7 @@ function Book({ address }: { address: Address }) {
   const list = useQuery({
     queryKey: ["payees", address],
     queryFn: async (): Promise<Row[]> => {
-      const [set, removed] = await Promise.all([vaultEvents("PayeeSet", { sender: address }), vaultEvents("PayeeRemoved", { sender: address })]);
-      const alive = new Map<Hex, boolean>();
-      for (const e of [...set.map((e) => ({ e, on: true })), ...removed.map((e) => ({ e, on: false }))].sort((a, b) => Number(a.e.blockNumber - b.e.blockNumber) || a.e.logIndex - b.e.logIndex)) {
-        const node = (e.e.args as { payee: Hex }).payee;
-        alive.set(node, e.on);
-      }
-      const nodes = [...alive].filter(([, on]) => on).map(([n]) => n);
+      const nodes = await activePayees(address);
       return Promise.all(nodes.map(async (node) => {
         const [biller, lim, available] = await Promise.all([
           chainClient.readContract({ ...vault, functionName: "billerOf", args: [address, node] }),
@@ -80,6 +74,7 @@ function PayeeRow({ r, address, onDone }: { r: Row; address: Address; onDone: ()
 
 function AddPayee({ address }: { address: Address }) {
   const params = useSearchParams();
+  const [family, setFamily] = useState(params.get("family") ?? PAYEE_BOOK_PARENT);
   const [tag, setTag] = useState(params.get("tag") ?? "");
   const [found, setFound] = useState<VerifiedPayee | null>(null);
   const [lookErr, setLookErr] = useState("");
@@ -88,12 +83,12 @@ function AddPayee({ address }: { address: Address }) {
   const [cap, setCap] = useState("");
   const [days, setDays] = useState("30");
   const tx = useTx(() => { window.dispatchEvent(new Event("ghar:payees")); setFound(null); });
-  useEffect(() => { setFound(null); setLookErr(""); }, [tag]);
+  useEffect(() => { setFound(null); setLookErr(""); }, [tag, family]);
 
   async function lookUp() {
     setLooking(true); setLookErr("");
     try {
-      const p = await getVerifiedPayee(ensClient as never, buildPayeeName(PAYEE_BOOK_PARENT, tag));
+      const p = await getVerifiedPayee(ensClient as never, buildPayeeName(family, tag));
       setFound(p); rememberName(namehash(p.name), p.name);
     } catch (e) {
       setLookErr(/missing payee records/.test(String(e)) ? "No verified records on that name yet. The provider writes them after verifying the account." : explain(e));
@@ -107,12 +102,16 @@ function AddPayee({ address }: { address: Address }) {
       <form onSubmit={(e) => { e.preventDefault(); if (tag.trim()) lookUp(); }}>
         <h2 className="card__h">Add a payee</h2>
         <div className="field">
+          <label htmlFor="family">Family name</label>
+          <input id="family" value={family} onChange={(e) => setFamily(e.target.value.trim())} />
+        </div>
+        <div className="field">
           <label htmlFor="tag">Bill type</label>
           <div className="lookup lookup--tight">
             <input id="tag" placeholder="rent" value={tag} onChange={(e) => setTag(e.target.value)} />
-            <button className="btn" disabled={!tag.trim() || looking}>{looking ? "Reading ENS" : "Look up"}</button>
+            <button className="btn" disabled={!tag.trim() || !family || looking}>{looking ? "Reading ENS" : "Look up"}</button>
           </div>
-          <span className="hint">{tag.trim() ? (() => { try { return buildPayeeName(PAYEE_BOOK_PARENT, tag); } catch (e) { return String((e as Error).message); } })() : `Becomes tag.${PAYEE_BOOK_PARENT}`}</span>
+          <span className="hint">{tag.trim() ? (() => { try { return buildPayeeName(family, tag); } catch (e) { return String((e as Error).message); } })() : `Becomes tag.${family}`}</span>
         </div>
         <p className={lookErr ? "msg msg--err" : "msg"}>{lookErr}</p>
       </form>

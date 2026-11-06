@@ -23,3 +23,9 @@ contracts/broadcast/**/dry-run/
 .arkiv-journal.jsonl
 .agent-holds
 .DS_Store
+.direct-deposits.jsonl
+.direct-claims.jsonl
+
+# Local tooling and design research
+.claude/
+docs/design-reconstruction/

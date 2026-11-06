@@ -27,7 +27,11 @@ People working abroad are often paid in USDT or USDC, while the bills they cover
 | Arkiv inbox | Signed bills that expire after the due date, and receipts the family can read | Arkiv Rabdi (7794095) |
 | Ghar agent | Reads bills, checks payees and calls the vault within its grant (`apps/agent`) | Off-chain service |
 | Settler | Runs the provider payout, settles on the vault and writes the receipt (`apps/agent`) | Off-chain service |
-| Web app | Landing page, vault screens, bill inbox and public receipts (`apps/web`) | Next.js |
+| Chat assistant | Ask in plain words ("pay my university fees"); Groq reads the vault, ENS and Arkiv, shows each payable bill as a card, and the sender approves it with a wallet signature. History is stored encrypted on Arkiv | Groq + Arkiv Rabdi |
+| Merchant widget | `<script src=".../widget.js">` plus `<ghar-invoice>` (customer) and `<ghar-merchant>` (merchant: totals, refunds, receipts, CSV export) on any site, with `ghar:status` events. Demo: `examples/merchant-demo` (`npm run demo:merchant`, port 4000) | Any web page |
+| Pay with Direct | Send money from your vault to a friend: they claim USD, EUR or GBP to their card or bank through Transak via a secret link tied to their email; the vault releases the USDT only after Transak pays (`/app/direct`, `/claim/…`) | Whitechain + Transak staging |
+| Gasless deposits | The sender signs an EIP-3009 `ReceiveWithAuthorization`; Ghar's relayer calls `depositWithAuthorization` and pays the WBT | Whitechain Sepolia |
+| Web app | Landing page, chat, vault screens, bill inbox, pay links and public receipts (`apps/web`) | Next.js |
 
 ## Repository layout
 
@@ -69,9 +73,13 @@ npm run settler -w @ghar/agent
 npm run dev -w @ghar/web
 ```
 
+For the chat, copy `apps/web/.env.example` to `apps/web/.env.local` and fill in `GROQ_API_KEYS`, `CHAT_AGENT_PRIVATE_KEY` (grant it on the Agent page), `CHAT_ARKIV_PRIVATE_KEY` (fund it with test GLM) and `CHAT_SECRET`.
+
+These commands use `gharfam.eth`. To work on another family, set `PAYEE_FAMILY` in the `.env` files. In the app, enter the family name on the Payees page.
+
 ## Live run
 
-One bill went through the full flow on testnet on 6 Nov 2026.
+One bill went through the full flow on testnet on 6 Nov 2026, on GharVault v1 (before gasless deposits were added).
 
 | Step | Proof |
 | --- | --- |
@@ -92,6 +100,14 @@ Transak staging sells a fixed amount of Sepolia ETH, so the delivered 39.84 USD 
 npm run read-bills -w @ghar/arkiv -- rent
 ```
 
+### Gasless deposit on GharVault v2
+
+| Step | Proof |
+| --- | --- |
+| v2 deployed with `depositWithAuthorization` | [`0x8ce0…1b49`](https://explorer.testnet.whitechain.io/tx/0x8ce055664ff5c5a2b90e8ad1f7748d62d4730076e8e80f663507db1ee54a1b49) |
+| Sender signed an EIP-3009 `ReceiveWithAuthorization` for 20 USDT; Ghar's relayer `0x5051…db65` submitted it | [`0xfd60…30ee`](https://explorer.testnet.whitechain.io/tx/0xfd600b8d473bcc01b3f2b6c9e3f0d5bf28549ae83474f583677797fb77ab30ee). The sender's WBT balance was unchanged before and after |
+| Second gasless deposit, 2 USDT: the relayer paid 0.00051 WBT (101,952 gas); the sender's WBT changed by 0 | [`0xb2fe…a5dd`](https://explorer.testnet.whitechain.io/tx/0xb2fe3900b5a8658111131a62cf3076b1d3d723871efa1f4211d4e508705aa5dd) |
+
 ## Networks and addresses
 
 | Item | Value |
@@ -99,7 +115,8 @@ npm run read-bills -w @ghar/arkiv -- rent
 | Whitechain Sepolia RPC | `https://rpc.testnet.whitechain.io` |
 | Whitechain explorer | https://explorer.testnet.whitechain.io |
 | Test USDT (6 decimals) | `0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7` |
-| GharVault | [`0xA855E5b5152F7C7c824dc5c8EF034696a65587Ae`](https://explorer.testnet.whitechain.io/address/0xA855E5b5152F7C7c824dc5c8EF034696a65587Ae) |
+| GharVault (v2, with gasless deposits, verified) | [`0x707447BCDD25651B0313c3542BB1a17fF2e1d29E`](https://explorer.testnet.whitechain.io/address/0x707447BCDD25651B0313c3542BB1a17fF2e1d29E) |
+| GharVault v1 (the live run below; superseded) | [`0xA855E5b5152F7C7c824dc5c8EF034696a65587Ae`](https://explorer.testnet.whitechain.io/address/0xA855E5b5152F7C7c824dc5c8EF034696a65587Ae) |
 | Arkiv Rabdi RPC | `https://rpc.rabdi.db-chain.testnet.arkiv.network` |
 | ENSv2 Sepolia deployment | https://docs.ens.domains/learn/deployments |
 

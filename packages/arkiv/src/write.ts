@@ -7,8 +7,8 @@ import { rabdi } from "@arkiv-network/sdk/chains";
 import { bytes, str, u256, u64, type Schema } from "@arkiv-network/sdk/schema";
 import { createPublicClient, custom, decodeFunctionData, getAddress, http, keccak256, parseAbi, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { billDigest, billTypedData, type BillInput } from "./bill.ts";
-import { GharBill, GharReceipt } from "./schema.ts";
+import { billEntity, billTypedData, type BillInput } from "./bill.ts";
+import { GharBill, GharChat, GharReceipt } from "./schema.ts";
 
 const CHAIN_ID = 7794095;
 const REGISTRY = "0x4400000000000000000000000000000000000044";
@@ -106,18 +106,7 @@ async function guardedCreate<S extends Schema>(cfg: WriterConfig, schema: S, val
 /** Signs a bill with the biller key and posts it from that same wallet, so $creator is the biller. */
 export async function postBill(cfg: WriterConfig, bill: BillInput & { currency: string; note?: string }) {
   const account = privateKeyToAccount(cfg.privateKey);
-  const signature = await account.signTypedData(billTypedData(bill));
-  const dueMs = bill.dueDate * 1000;
-  const values = {
-    payee: str(bill.payee), invoiceRef: str(bill.invoiceRef), currency: str(bill.currency),
-    dueDate: u64(bill.dueDate), digest: str(billDigest(bill)), amount: u256(bill.amount), signature: bytes(signature),
-    ...(bill.note ? { note: str(bill.note) } : {}),
-  };
-  const options = {
-    // Kept 7 days past due so the family can still read it; the vault refuses it after the due date.
-    expiration: ExpirationTime.atDate(new Date(dueMs + 7 * 86_400_000), { atLeast: ExpirationTime.fromDays(1) }),
-    flags: { readonly: true },
-  };
+  const { values, options } = billEntity(bill, await account.signTypedData(billTypedData(bill)));
   return guardedCreate(cfg, GharBill, values as never, options as never);
 }
 
@@ -129,6 +118,7 @@ export interface ReceiptInput {
   settlementTx: Hex;
   providerRef: string;
   fiat?: string;
+  payoutRef?: string;
 }
 
 /** Provider's receipt: readonly, and kept for the longest lifetime Rabdi allows (about six months). */
@@ -137,6 +127,22 @@ export function postReceipt(cfg: WriterConfig, r: ReceiptInput) {
     digest: str(r.digest), billKey: str(r.billKey), payee: str(r.payee), status: str(r.status),
     settlementTx: str(r.settlementTx), providerRef: str(r.providerRef.slice(0, 120)),
     ...(r.fiat ? { fiat: str(r.fiat) } : {}),
+    ...(r.payoutRef ? { payoutRef: str(r.payoutRef.slice(0, 120)) } : {}),
   };
   return guardedCreate(cfg, GharReceipt, values as never, { expiration: ExpirationTime.max(), flags: { readonly: true } } as never);
+}
+
+export interface ChatTurnInput {
+  owner: Address;
+  thread: string;
+  seq: number;
+  at: number;
+  /** Already encrypted by the caller. */
+  body: Hex;
+}
+
+/** One encrypted chat exchange: readonly, kept for the longest lifetime Rabdi allows. */
+export function postChatTurn(cfg: WriterConfig, t: ChatTurnInput) {
+  const values = { owner: str(t.owner.toLowerCase()), thread: str(t.thread), seq: u64(t.seq), at: u64(t.at), body: bytes(t.body) };
+  return guardedCreate(cfg, GharChat, values as never, { expiration: ExpirationTime.max(), flags: { readonly: true } } as never);
 }

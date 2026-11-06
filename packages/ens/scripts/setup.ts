@@ -1,18 +1,21 @@
-// Deploys the payee-book resolver and registers the parent name on ENSv2 Sepolia.
-// Safe to re-run: skips whatever already exists.
+// Registers a family name on ENSv2 Sepolia pointing at the provider's resolver, deploying that
+// resolver on the first run. Safe to re-run: skips whatever already exists.
+// Usage: PAYEE_FAMILY=<family.eth> npm run setup -w @ghar/ens
 import {
   createWalletClient, encodeAbiParameters, encodeFunctionData, keccak256, parseAbi,
   toHex, zeroAddress, zeroHash, type Address, type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { namehash } from "viem/ens";
-import { ENS_V2_SEPOLIA, PAYEE_BOOK_PARENT, ensChain } from "@ghar/shared";
+import { ENS_V2_SEPOLIA, PAYEE_BOOK_PARENT, PAYEE_BOOK_RESOLVER, ensChain } from "@ghar/shared";
+import { payeeFamily } from "../src/index.ts";
 import { env, publicClient, resolverAbi, ROLE_SET_TEXT, transport } from "./client.ts";
 
 const owner = privateKeyToAccount(env("DEPLOYER_PRIVATE_KEY") as Hex);
 const verifier = env("PROVIDER_ADDRESS") as Address;
 const wallet = createWalletClient({ account: owner, chain: ensChain, transport });
-const label = PAYEE_BOOK_PARENT.replace(/\.eth$/, "");
+const family = payeeFamily();
+const label = family.replace(/\.eth$/, "");
 const ONE_YEAR = 365n * 24n * 60n * 60n;
 
 const factoryAbi = parseAbi([
@@ -46,7 +49,8 @@ const salt = BigInt(keccak256(encodeAbiParameters(
   [{ type: "bytes32" }, { type: "bytes32" }, { type: "uint256" }],
   [keccak256(toHex("OwnedResolver")), namehash(PAYEE_BOOK_PARENT), 0n],
 )));
-const resolver = await publicClient.readContract({
+// Every family shares the provider's resolver, so only the first family deploys it.
+const resolver = family !== PAYEE_BOOK_PARENT ? PAYEE_BOOK_RESOLVER : await publicClient.readContract({
   address: ENS_V2_SEPOLIA.verifiableFactory, abi: factoryAbi,
   functionName: "predictProxyAddress", args: [owner.address, salt],
 });
@@ -72,7 +76,7 @@ if (!(await roleOf(verifier)) || (await roleOf(owner.address))) {
 // 2. Parent name, registered already pointing at the resolver.
 const registrar = { address: ENS_V2_SEPOLIA.ethRegistrar, abi: registrarAbi } as const;
 if (!(await publicClient.readContract({ ...registrar, functionName: "isAvailable", args: [label] }))) {
-  console.log(`${PAYEE_BOOK_PARENT} is already registered`);
+  console.log(`${family} is already registered`);
 } else {
   const [base, premium] = await publicClient.readContract({
     ...registrar, functionName: "getRegisterPrice", args: [label, ONE_YEAR, ENS_V2_SEPOLIA.mockUsdc],
@@ -103,4 +107,4 @@ if (!(await publicClient.readContract({ ...registrar, functionName: "isAvailable
   }));
 }
 
-console.log(`\n${PAYEE_BOOK_PARENT} owner ${owner.address}\nresolver ${resolver}\nverifier ${verifier}`);
+console.log(`\n${family} owner ${owner.address}\nresolver ${resolver}\nverifier ${verifier}`);

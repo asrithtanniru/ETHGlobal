@@ -46,9 +46,27 @@ flowchart LR
 | `settlementTx` | str | no | Whitechain transaction |
 | `providerRef` | str | no | Provider order id, or refund reason |
 | `fiat` | str, optional | no | Delivered amount, for example `40.10 USD` |
+| `payoutRef` | str, optional | no | The ENS `ghar.payoutRef` the provider paid against |
 
 - **Owner and creator:** the provider wallet. Readers filter with `createdBy(provider)`, where `provider` is read from the vault.
 - **Expires:** `ExpirationTime.max()`, about 182 days. Longer retention would need a Lifetime Extension.
+
+## GharChat (`ghar_chat`)
+
+One chat exchange: the sender's message, the assistant's reply, the steps it took and the bill cards it showed.
+
+| Column | Type | Indexed | Why |
+| --- | --- | --- | --- |
+| `owner` | str | yes | Lowercase sender address. Lists one sender's chats |
+| `thread` | str | yes | Conversation id (UUID). Loads one conversation |
+| `seq` | u64 | yes | Position in the conversation. `seq = 0` rows are the history list |
+| `at` | u64 | yes | Unix milliseconds, for ordering |
+| `body` | bytes | no | AES-256-GCM ciphertext of the exchange, under a per-owner key derived from the server's `CHAT_SECRET` |
+
+- **Owner and creator:** the chat writer wallet (`CHAT_ARKIV_PRIVATE_KEY`). Readers filter with `createdBy(writer)`, so nobody else can plant messages in a sender's history.
+- **Privacy:** only the indexed columns are public. They show that an address chats and when, never what was said.
+- **Reads** need the sender's wallet-signed session, so the server decrypts only for the owner.
+- **Expires:** `ExpirationTime.max()`, about 182 days, `readonly`.
 
 ## What stops what
 

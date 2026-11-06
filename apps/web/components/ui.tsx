@@ -1,17 +1,18 @@
 import Link from "next/link";
+import { GHAR_VAULT } from "@ghar/shared";
 import type { ReactNode, SVGProps } from "react";
 
 export const REPO = "https://github.com/asrithtanniru/ETHGlobal";
 export const DOCS = `${REPO}#readme`;
-export const VAULT_EXPLORER = "https://explorer.testnet.whitechain.io/address/0xA855E5b5152F7C7c824dc5c8EF034696a65587Ae";
+export const VAULT_EXPLORER = `https://explorer.testnet.whitechain.io/address/${GHAR_VAULT}`;
 
 export function Logo({ className = "" }: { className?: string }) {
   return (
-    <Link href="/" prefetch={false} className={`logo ${className}`} aria-label="Ghar home">
+    <Link href="/" prefetch={false} className={`logo ${className}`} aria-label="Kin home">
       <svg className="logo__mark" viewBox="0 0 31 31" aria-hidden="true">
         <path fillRule="evenodd" d="M0 0h31v31H0zM9.5 9.5v12h12v-12z" fill="currentColor" />
       </svg>
-      <span className="logo__word">Ghar</span>
+      <span className="logo__word">Kin</span>
     </Link>
   );
 }
@@ -67,5 +68,26 @@ export const Icon = {
   ),
   receipt: (p: IconProps) => (
     <svg {...base} {...p}><path d="M5 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z" /><path d="M9 8h6M9 12h6M9 16h4" /></svg>
+  ),
+  bank: (p: IconProps) => (
+    <svg {...base} {...p}><path d="M3 21h18M5 21V10M19 21V10M9.5 21V10M14.5 21V10M2.5 10 12 3.5 21.5 10z" /></svg>
+  ),
+  chat: (p: IconProps) => (
+    <svg {...base} {...p}><path d="M12 20.5h8.5M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>
+  ),
+  send: (p: IconProps) => (
+    <svg {...base} strokeWidth={1.8} {...p}><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+  ),
+  down: (p: IconProps) => (
+    <svg {...base} strokeWidth={1.8} {...p}><path d="M12 5v14M19 12l-7 7-7-7" /></svg>
+  ),
+  stop: (p: IconProps) => (
+    <svg {...base} {...p}><rect x="7" y="7" width="10" height="10" fill="currentColor" stroke="none" /></svg>
+  ),
+  copy: (p: IconProps) => (
+    <svg {...base} {...p}><rect x="8" y="8" width="13" height="13" /><path d="M16 8V3H3v13h5" /></svg>
+  ),
+  check: (p: IconProps) => (
+    <svg {...base} strokeWidth={1.8} {...p}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
   ),
 };

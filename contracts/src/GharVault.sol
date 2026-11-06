@@ -7,6 +7,21 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 
+/// @notice EIP-3009 pull, as the official Whitechain test USDT implements it.
+interface IERC3009 {
+    function receiveWithAuthorization(
+        address from,
+        address to,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+}
+
 /// @title GharVault
 /// @notice Holds USDT for senders abroad. Every sender has an isolated balance that only
 ///         they can fund or withdraw. Agent grants, payee caps and the nominee timer are
@@ -176,6 +191,30 @@ contract GharVault is ReentrancyGuard, EIP712 {
         balanceOf[msg.sender] += amount;
         usdt.safeTransferFrom(msg.sender, address(this), amount);
         emit Deposited(msg.sender, amount);
+    }
+
+    /// @notice Moves `amount` USDT from `from` into `from`'s vault balance using their EIP-3009
+    ///         ReceiveWithAuthorization signature, so anyone (Ghar's relayer) can pay the gas.
+    /// @dev receiveWithAuthorization only lets the payee (this vault) submit the authorization, so it
+    ///      can't be front-run straight to the token, and the token's nonce makes it single-use.
+    ///      Only `from` is ever credited, whoever calls this.
+    function depositWithAuthorization(
+        address from,
+        uint256 amount,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external nonReentrant {
+        if (amount == 0) revert ZeroAmount();
+        lastActive[from] = block.timestamp;
+        balanceOf[from] += amount;
+        IERC3009(address(usdt)).receiveWithAuthorization(
+            from, address(this), amount, validAfter, validBefore, nonce, v, r, s
+        );
+        emit Deposited(from, amount);
     }
 
     /// @notice Sends `amount` of the caller's vault balance to `to`.

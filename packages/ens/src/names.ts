@@ -1,10 +1,14 @@
 /** Dynamic payee names: `{tag}.{family}.eth` built from username + spend tag. */
 import { normalize } from "viem/ens";
+import { PAYEE_BOOK_PARENT } from "@ghar/shared";
 
 // `agent` is the AI-agent identity (ENSIP-26), never a user payee tag.
 export const RESERVED_TAGS = ["agent"] as const;
 
 const MAX_LABEL = 63;
+
+/** The family an agent or script works for: PAYEE_FAMILY, else the demo family. */
+export const payeeFamily = () => process.env.PAYEE_FAMILY || PAYEE_BOOK_PARENT;
 
 /** Lowercase, hyphenate, strip illegal chars, collapse repeats, cap at 63. */
 export function slugifyCategory(input: string): string {

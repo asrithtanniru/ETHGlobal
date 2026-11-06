@@ -1,11 +1,11 @@
 import { createPublicClient } from "@arkiv-network/sdk";
 import { rabdi } from "@arkiv-network/sdk/chains";
-import { and, desc, eq, gte } from "@arkiv-network/sdk/query";
+import { and, asc, desc, eq, gte } from "@arkiv-network/sdk/query";
 import { key as keyValue, str, u64 } from "@arkiv-network/sdk/schema";
 import { http, type Address, type Hex } from "viem";
 import type { ReceiptStatus } from "@ghar/shared";
 import type { InboxBill } from "./bill.ts";
-import { GharBill, GharReceipt } from "./schema.ts";
+import { GharBill, GharChat, GharReceipt } from "./schema.ts";
 
 /**
  * Read client. The access key stays server-side; it is part of the RPC URL, so never log the
@@ -31,6 +31,7 @@ export interface InboxReceipt {
   settlementTx: Hex;
   providerRef: string;
   fiat?: string;
+  payoutRef?: string;
   expiresAt: bigint;
 }
 
@@ -41,7 +42,7 @@ const billFields = {
 
 const receiptFields = {
   $key: true, $creator: true, $expiresAt: true, digest: true, billKey: true, payee: true,
-  status: true, settlementTx: true, providerRef: true, fiat: true,
+  status: true, settlementTx: true, providerRef: true, fiat: true, payoutRef: true,
 } as const;
 
 type Field<T> = { value: T };
@@ -51,7 +52,7 @@ type BillRow = {
 };
 type ReceiptRow = {
   $key: Hex; $creator: Address; $expiresAt: bigint; digest: Field<string>; billKey: Field<string>; payee: Field<string>;
-  status: Field<string>; settlementTx: Field<string>; providerRef: Field<string>; fiat?: Field<string>;
+  status: Field<string>; settlementTx: Field<string>; providerRef: Field<string>; fiat?: Field<string>; payoutRef?: Field<string>;
 };
 
 export function toBill(r: BillRow): InboxBill {
@@ -80,6 +81,7 @@ export function toReceipt(r: ReceiptRow): InboxReceipt {
     settlementTx: r.settlementTx.value as Hex,
     providerRef: r.providerRef.value,
     ...(r.fiat ? { fiat: r.fiat.value } : {}),
+    ...(r.payoutRef ? { payoutRef: r.payoutRef.value } : {}),
     expiresAt: r.$expiresAt,
   };
 }
@@ -126,4 +128,31 @@ export async function receiptByKey(client: ArkivReader, key: Hex, provider: Addr
   const page = await client.select(receiptFields).from(GharReceipt).createdBy(provider).where(eq("$key", keyValue(key))).limit(1).fetch();
   const row = page.entities[0];
   return row ? toReceipt(row as unknown as ReceiptRow) : undefined;
+}
+
+export interface ChatTurnRow {
+  key: Hex;
+  thread: string;
+  seq: number;
+  at: number;
+  body: Hex;
+}
+
+const chatFields = { $key: true, thread: true, seq: true, at: true, body: true } as const;
+type ChatRow = { $key: Hex; thread: Field<string>; seq: Field<bigint>; at: Field<bigint>; body: Field<Hex> };
+const toTurn = (r: ChatRow): ChatTurnRow => ({ key: r.$key, thread: r.thread.value, seq: Number(r.seq.value), at: Number(r.at.value), body: r.body.value });
+
+/** First turn of every thread an owner has, newest first. Only the chat writer's entities count. */
+export async function chatThreads(client: ArkivReader, owner: Address, writer: Address) {
+  const page = await client.select(chatFields).from(GharChat).createdBy(writer)
+    .where(and(eq("owner", str(owner.toLowerCase())), eq("seq", u64(0)))).orderBy(desc("at")).limit(100).fetch();
+  return page.entities.map((r) => toTurn(r as unknown as ChatRow));
+}
+
+/** Every turn of one thread, oldest first. */
+// shortcut: one page of 100 turns (the SDK's MAX_LIMIT); page with the cursor once threads get that long.
+export async function chatTurns(client: ArkivReader, owner: Address, thread: string, writer: Address) {
+  const page = await client.select(chatFields).from(GharChat).createdBy(writer)
+    .where(and(eq("owner", str(owner.toLowerCase())), eq("thread", str(thread)))).orderBy(asc("at")).limit(100).fetch();
+  return page.entities.map((r) => toTurn(r as unknown as ChatRow));
 }

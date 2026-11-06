@@ -2,8 +2,8 @@
 // Usage: npm run set-payee -w @ghar/ens -- <tag> <payoutRef> <billerAddress>
 import { createWalletClient, getAddress, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { PAYEE_BOOK_PARENT, ensChain } from "@ghar/shared";
-import { buildPayeeName, setVerifiedPayee } from "../src/index.ts";
+import { ensChain } from "@ghar/shared";
+import { buildPayeeName, payeeFamily, setVerifiedPayee } from "../src/index.ts";
 import { env, publicClient, transport } from "./client.ts";
 
 const [tag, payoutRef, billerArg] = process.argv.slice(2);
@@ -11,7 +11,7 @@ if (!tag || !payoutRef || !billerArg) {
   throw new Error("usage: set-payee <tag> <payoutRef> <billerAddress>");
 }
 const payee = {
-  name: buildPayeeName(PAYEE_BOOK_PARENT, tag),
+  name: buildPayeeName(payeeFamily(), tag),
   payoutRef,
   biller: getAddress(billerArg), // rejects malformed or wrongly checksummed addresses
 };

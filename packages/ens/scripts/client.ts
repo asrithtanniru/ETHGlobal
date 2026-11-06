@@ -4,8 +4,7 @@ import { ensChain } from "@ghar/shared";
 export const transport = http(process.env.SEPOLIA_RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com");
 export const publicClient = createPublicClient({ chain: ensChain, transport });
 
-/** PermissionedResolver role that allows writing text records. */
-export const ROLE_SET_TEXT = 1n << 4n;
+export { ROLE_SET_TEXT } from "../src/records.ts";
 
 export const resolverAbi = parseAbi([
   "function initialize((address account, uint256 roleBitmap)[] grants, bytes[] calls)",

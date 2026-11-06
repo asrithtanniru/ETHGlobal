@@ -21,9 +21,13 @@ import type { VerifiedPayee } from "@ghar/shared";
 export const PAYOUT_KEY = "ghar.payoutRef";
 export const BILLER_KEY = "ghar.biller";
 
-const resolverAbi = parseAbi([
+/** PermissionedResolver role that allows writing text records: only the provider's verifier holds it. */
+export const ROLE_SET_TEXT = 1n << 4n;
+
+export const resolverAbi = parseAbi([
   "function setText(bytes name, string key, string value)",
   "function multicall(bytes[] data)",
+  "function hasRootRoles(uint256 roleBitmap, address account) view returns (bool)",
 ]);
 
 /**

@@ -1,8 +1,8 @@
 // Biller posts a signed bill to the Arkiv inbox from its own wallet.
 // Usage: npm run post-bill -w @ghar/arkiv -- <tag> <amountUsdt> <dueInDays> <invoiceRef> [currency=USD] [note]
 import { parseUnits, type Hex } from "viem";
-import { PAYEE_BOOK_PARENT, USDT } from "@ghar/shared";
-import { buildPayeeName } from "@ghar/ens";
+import { USDT } from "@ghar/shared";
+import { buildPayeeName, payeeFamily } from "@ghar/ens";
 import { billDigest } from "../src/bill.ts";
 import { postBill } from "../src/write.ts";
 
@@ -10,7 +10,7 @@ const [tag, amount, days, invoiceRef, currency = "USD", note] = process.argv.sli
 if (!tag || !amount || !days || !invoiceRef) throw new Error("usage: post-bill <tag> <amountUsdt> <dueInDays> <invoiceRef> [currency] [note]");
 
 const bill = {
-  payee: buildPayeeName(PAYEE_BOOK_PARENT, tag),
+  payee: buildPayeeName(payeeFamily(), tag),
   invoiceRef,
   amount: parseUnits(amount, USDT.decimals),
   dueDate: Math.floor(Date.now() / 1000) + Number(days) * 86_400,

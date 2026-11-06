@@ -4,8 +4,8 @@
 import { BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, formatUnits, http, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { namehash } from "viem/ens";
-import { ensChain, GHAR_VAULT, gharVaultAbi, PAYEE_BOOK_PARENT, settlementChain, USDT } from "@ghar/shared";
-import { buildPayeeName, getVerifiedPayee } from "@ghar/ens";
+import { ensChain, GHAR_VAULT, gharVaultAbi, settlementChain, USDT } from "@ghar/shared";
+import { buildPayeeName, getVerifiedPayee, payeeFamily } from "@ghar/ens";
 import { arkivClient, checkBill, openBills, toVaultBill, type InboxBill } from "@ghar/arkiv";
 import { decide } from "./decide.ts";
 import { loadHolds, parseDigests, recordHold } from "./holds.ts";
@@ -53,7 +53,7 @@ async function payBill(bill: InboxBill) {
 
 async function tick() {
   for (const tag of tags) {
-    const name = buildPayeeName(PAYEE_BOOK_PARENT, tag);
+    const name = buildPayeeName(payeeFamily(), tag);
     const payee = await getVerifiedPayee(ens as never, name);
     const node = namehash(name);
     for (const bill of await openBills(arkiv, name, payee.biller)) {

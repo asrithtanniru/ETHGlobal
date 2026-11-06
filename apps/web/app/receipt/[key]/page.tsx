@@ -6,7 +6,7 @@ import { PrintedReceipt } from "@/components/PrintedReceipt";
 import { explorerTx, short, usdt, when } from "@/lib/chain";
 import { arkiv, providerWallet } from "@/lib/inbox";
 
-export const metadata: Metadata = { title: "Ghar · Receipt" };
+export const metadata: Metadata = { title: "Kin · Receipt" };
 export const dynamic = "force-dynamic";
 
 /** Public page the family opens from a link. No wallet needed. */
@@ -37,6 +37,7 @@ export default async function Receipt({ params }: { params: Promise<{ key: strin
           ...(bill ? [["due", when(bill.dueDate)]] : []),
           ["status", receipt.status],
           [paid ? "order" : "reason", receipt.providerRef],
+          ...(receipt.payoutRef ? [["paid to", receipt.payoutRef]] : []),
           ["provider", short(receipt.creator)],
         ].map(([k, v]) => (
           <div key={k}><dt>{k}</dt><dd>{v}</dd></div>

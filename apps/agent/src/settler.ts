@@ -1,14 +1,10 @@
 // Provider-side settler: PayoutRequested on the vault -> Transak staging order -> markPaid or refund
 // -> GharReceipt on Arkiv. Needs a vault deployed with settlement, and the vault's provider key.
-import { createPublicClient, createWalletClient, formatUnits, http, type Address, type Hex } from "viem";
+import { createPublicClient, createWalletClient, http, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { ensChain, GHAR_VAULT, gharVaultAbi, settlementChain, USDT, type VerifiedPayee } from "@ghar/shared";
-import { getVerifiedPayee } from "@ghar/ens";
-import { arkivClient, billByDigest, receiptForDigest } from "@ghar/arkiv";
-import { postReceipt } from "@ghar/arkiv/write";
-// @ts-expect-error plain JS helper from the payout spike
-import * as transak from "../../../ghar-payout-spike/adapter/transak.mjs";
-import { billMatchesPayee, checkPayout, isMissingPayee } from "./payout-check.ts";
+import { ensChain, GHAR_VAULT, gharVaultAbi, settlementChain } from "@ghar/shared";
+import { arkivClient } from "@ghar/arkiv";
+import { DEPOSIT_JOURNAL, directPayouts } from "./direct.ts";
 
 const env = (k: string) => process.env[k] || (() => { throw new Error(`${k} is not set`); })();
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
@@ -27,76 +23,48 @@ const explorer = settlementChain.blockExplorers?.default.url;
 const provider = await chain.readContract({ ...vault, functionName: "provider" });
 if (provider.toLowerCase() !== account.address.toLowerCase()) throw new Error(`PROVIDER_PRIVATE_KEY is ${account.address}, the vault's provider is ${provider}`);
 
-/** Runs the Transak order and returns how it ended. The payee confirms in the widget, as in staging. */
-async function payout(digest: Hex, usdt: string): Promise<{ ok: true; ref: string; fiat: string } | { ok: false; reason: string }> {
-  const partnerOrderId = `ghar-${digest.slice(2, 10)}-${Date.now()}`;
-  const ethAmount = process.env.TRANSAK_SELL_ETH || "0.02"; // staging sells Sepolia ETH, not USDT
+const direct = directPayouts({
+  chain: chain as never, wallet: wallet as never, ens: ens as never, arkiv, providerKey: key,
+  arkivAccessKey: process.env.ARKIV_ACCESS_KEY ?? "", arkivMaxFeeWei: BigInt(process.env.ARKIV_MAX_FEE_WEI ?? "0"),
+  journal: ".arkiv-journal.jsonl", depositJournal: DEPOSIT_JOURNAL,
+  sellEth: process.env.TRANSAK_SELL_ETH || "0.02", email: process.env.TRANSAK_EMAIL,
+});
+const FINAL = new Set(["paid", "refunded", "receipt-pending", "review-failed", "deposit-uncertain", "amount-mismatch"]);
+
+const report = (digest: Hex, p: { stage: string; settleTx?: Hex; receiptKey?: Hex; reason?: string }) => {
+  log(`${digest.slice(0, 10)}: ${p.stage}${p.reason ? ` (${p.reason})` : ""}`);
+  if (p.settleTx) log(`[Whitechain] ${explorer}/tx/${p.settleTx}`);
+  if (p.receiptKey) log(`[Arkiv] receipt ${p.receiptKey}`);
+};
+
+async function settle(digest: Hex) {
+  const r = await direct.review(digest);
+  if (r.status !== "pending") return log(`skip ${digest.slice(0, 10)}: not pending`);
+  if (r.receiptKey) return log(`skip ${digest.slice(0, 10)}: receipt exists`);
+  if (!r.check.ok) {
+    log(`refusing ${digest.slice(0, 10)}: ${r.check.reason}`);
+    return report(digest, await direct.finish(digest, { ok: false, reason: r.check.reason }));
+  }
+  log(`[ENS] ${r.payee} payoutRef=${r.check.payoutRef}`);
+  let opened;
   try {
-    const url = await transak.createSellWidget({ partnerOrderId, cryptoAmount: Number(ethAmount), email: process.env.TRANSAK_EMAIL });
-    log(`[Transak] order ${partnerOrderId} for ${usdt} USDT. Open within 5 minutes and confirm:\n  ${url}`);
-    let sent = false, last = "";
-    const deadline = Date.now() + 30 * 60_000;
-    while (Date.now() < deadline) {
-      await sleep(5000);
-      const order = await transak.getOrder(partnerOrderId).catch(() => null);
-      if (!order) continue;
-      if (order.status !== last) { last = order.status; log(`[Transak] ${order.id}: ${order.status}`); }
-      if (!sent && order.status === "AWAITING_PAYMENT_FROM_USER" && order.cryptoPaymentData?.paymentAddress) {
-        const h = await transak.sendDeposit(order.cryptoPaymentData.paymentAddress, ethAmount);
-        sent = true;
-        log(`[Sepolia] deposit https://sepolia.etherscan.io/tx/${h}`);
-      }
-      if (transak.DONE.includes(order.status)) return { ok: true, ref: order.id, fiat: `${order.fiatAmount} ${order.fiatCurrency}` };
-      if (transak.DEAD.includes(order.status)) return { ok: false, reason: `Transak order ${order.status}` };
-    }
-    return { ok: false, reason: "Transak order timed out" };
+    opened = await direct.start(digest);
   } catch (e) {
     log("[Transak] error:", (e as Error).message.split("\n")[0]);
-    return { ok: false, reason: "provider error" };
+    return report(digest, await direct.finish(digest, { ok: false, reason: "provider error" }));
   }
-}
-
-/** Missing records refund the payout, which can't be undone. Any other failure throws, so the poll retries it. */
-async function readPayee(name: string): Promise<VerifiedPayee | undefined> {
-  try {
-    return await getVerifiedPayee(ens as never, name, { strict: true });
-  } catch (e) {
-    if (isMissingPayee(e)) return undefined;
-    throw e;
+  log(`[Transak] order ${opened.orderId} for ${r.amountUsdt} USDT to ${opened.payoutRef}. Open within 5 minutes and confirm:\n  ${opened.widgetUrl}`);
+  let last = "", deposit = "";
+  const deadline = Date.now() + 30 * 60_000;
+  while (Date.now() < deadline) {
+    await sleep(5000);
+    const p = await direct.advance(digest).catch((e) => { log("advance failed:", (e as Error).message.split("\n")[0]); return undefined; });
+    if (!p) continue;
+    if (p.orderStatus && p.orderStatus !== last) { last = p.orderStatus; log(`[Transak] ${p.orderId}: ${p.orderStatus}`); }
+    if (p.depositTx && p.depositTx !== deposit) { deposit = p.depositTx; log(`[Sepolia] deposit https://sepolia.etherscan.io/tx/${p.depositTx}`); }
+    if (FINAL.has(p.stage)) return report(digest, p);
   }
-}
-
-async function settle(digest: Hex, amount: bigint, sender: Address, node: Hex) {
-  const usdt = formatUnits(amount, USDT.decimals);
-  const [, , status] = await chain.readContract({ ...vault, functionName: "payoutOf", args: [digest] }) as readonly [Address, bigint, number, bigint];
-  if (status !== 1) return log(`skip ${digest.slice(0, 10)}: not pending`);
-  if (await receiptForDigest(arkiv, digest, account.address)) return log(`skip ${digest.slice(0, 10)}: receipt exists`);
-
-  // Only the wallet the sender accepted counts, so a stranger's post can't claim this digest.
-  const vaultBiller = await chain.readContract({ ...vault, functionName: "billerOf", args: [sender, node] });
-  const bill = await billByDigest(arkiv, digest, vaultBiller);
-  const payee = bill && billMatchesPayee(bill.payee, node) ? await readPayee(bill.payee) : undefined;
-  const check = checkPayout(node, bill, payee, vaultBiller);
-  if (check.ok) log(`[ENS] ${payee?.name} payoutRef=${payee?.payoutRef}`);
-  else log(`refusing ${digest.slice(0, 10)}: ${check.reason}`);
-
-  const out = check.ok ? await payout(digest, usdt) : ({ ok: false, reason: check.reason } as const);
-  const hash = await wallet.writeContract(out.ok
-    ? { ...vault, functionName: "markPaid", args: [digest, out.ref] }
-    : { ...vault, functionName: "refund", args: [digest, out.reason] });
-  const mined = await chain.waitForTransactionReceipt({ hash });
-  if (mined.status !== "success") throw new Error(`settlement reverted: ${hash}`);
-  log(`[Whitechain] ${out.ok ? "markPaid" : "refund"} ${explorer}/tx/${hash}`);
-
-  const r = await postReceipt({
-    accessKey: process.env.ARKIV_ACCESS_KEY ?? "", privateKey: key,
-    maxCostWei: BigInt(process.env.ARKIV_MAX_FEE_WEI ?? "0"), journal: ".arkiv-journal.jsonl",
-  }, {
-    digest, billKey: bill?.key ?? (`0x${"0".repeat(64)}` as Hex), payee: bill?.payee ?? "unknown",
-    status: out.ok ? "paid" : "refunded", settlementTx: hash,
-    providerRef: out.ok ? out.ref : out.reason, ...(out.ok ? { fiat: out.fiat } : {}),
-  });
-  log(`[Arkiv] receipt ${r.entityKey}\n  https://rabdi.explorer.arkiv.network/tx/${r.txHash}`);
+  report(digest, await direct.finish(digest, { ok: false, reason: "Transak order timed out" }));
 }
 
 log(`settler ${account.address} watching ${GHAR_VAULT}`);
@@ -107,7 +75,7 @@ for (;;) {
     const to = from + 9_999n < head ? from + 9_999n : head; // the RPC caps log ranges at 10,000 blocks
     if (to >= from) {
       const events = await chain.getContractEvents({ ...vault, eventName: "PayoutRequested", fromBlock: from, toBlock: to });
-      for (const e of events) await settle(e.args.digest!, e.args.amount!, e.args.sender!, e.args.payee!);
+      for (const e of events) await settle(e.args.digest!);
       from = to + 1n;
     }
   } catch (e) {

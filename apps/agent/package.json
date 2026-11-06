@@ -5,6 +5,12 @@
   "description": "Ghar agent and settler: Arkiv bills to vault payments, and payouts to Arkiv receipts.",
   "license": "MIT",
   "type": "module",
+  "exports": {
+    "./decide": "./src/decide.ts",
+    "./llm": "./src/llm.ts",
+    "./reviewer": "./src/reviewer.ts",
+    "./direct": "./src/direct.ts"
+  },
   "scripts": {
     "agent": "node --env-file=.env src/agent.ts",
     "settler": "node --env-file=.env src/settler.ts",
