@@ -2,77 +2,106 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider, useConnect, useConnection, useConnectors, useDisconnect, useSwitchChain } from "wagmi";
 import { settlementChain } from "@ghar/shared";
-import { Logo } from "../ui";
+import { Icon, Logo } from "../ui";
 import { explorerTx, short, wagmiConfig } from "@/lib/chain";
 import type { TxState } from "./useTx";
 
 const NAV = [
-  ["Overview", "/app"],
-  ["Payees", "/app/payees"],
-  ["Bills", "/app/bills"],
-  ["Agent", "/app/agent"],
-  ["Activity", "/app/activity"],
-  ["Nominee", "/app/nominee"],
+  ["Overview", "/app", Icon.home],
+  ["Payees", "/app/payees", Icon.payee],
+  ["Bills", "/app/bills", Icon.receipt],
+  ["Agent", "/app/agent", Icon.grant],
+  ["Activity", "/app/activity", Icon.activity],
+  ["Nominee", "/app/nominee", Icon.nominee],
 ] as const;
+
+/** Public reads a family member can use without a wallet; every other screen sits behind the sign-in. */
+const OPEN_PATHS = ["/app/bills", "/app/activity"];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [qc] = useState(() => new QueryClient());
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={qc}>
-        <Header />
-        <main className="app-main">{children}</main>
+        <Gate>{children}</Gate>
       </QueryClientProvider>
     </WagmiProvider>
   );
 }
 
-function Header() {
+function Gate({ children }: { children: ReactNode }) {
   const path = usePathname();
-  const sub = useRef<HTMLElement>(null);
-  // Phones: the sub-nav scrolls sideways; keep the current page's tab in view.
-  useEffect(() => { sub.current?.querySelector("[aria-current]")?.scrollIntoView({ inline: "center", block: "nearest" }); }, [path]);
+  const { status } = useConnection();
+  if (status === "connected" || OPEN_PATHS.includes(path)) return <Dashboard>{children}</Dashboard>;
+  if (status === "reconnecting") return <p className="signin-wait">Checking your wallet<span className="dots" /></p>;
+  return <SignIn />; // stays up through "connecting" so a rejected request can show its error
+}
+
+function SignIn() {
   return (
-    <div className="sticky" style={{ transform: "none" }}>
-      <div className="frame sticky__in">
-        <div><Logo /></div>
-        <div />
+    <div className="signin">
+      <div className="signin__panel">
+        <Logo />
         <div>
-          <nav className="nav" aria-label="App">
-            {NAV.map(([l, href]) => (
-              <Link key={href} href={href} aria-current={path === href ? "page" : undefined}>{l}</Link>
-            ))}
-          </nav>
+          <h1 className="signin__h">Open your vault</h1>
+          <p className="signin__p">Ghar reads your vault on Whitechain Sepolia and asks your wallet to sign every change.</p>
+          <div className="form-actions"><ConnectButtons /></div>
         </div>
-        <div><WalletButton /></div>
+        <p className="signin__alt">
+          No wallet on this device? You can still <Link href="/app/bills">read a payee&apos;s bills</Link> or <Link href="/app/activity">look up payouts</Link>.
+        </p>
       </div>
-      <nav ref={sub} className="subnav app-subnav frame" aria-label="App mobile">
-        {NAV.map(([l, href]) => (
-          <Link key={href} href={href} aria-current={path === href ? "page" : undefined}>{l}</Link>
-        ))}
-      </nav>
+      <div className="signin__art"><img src="/art/vault.webp" width={705} height={515} alt="" /></div>
     </div>
   );
 }
 
-function WalletButton() {
+function Dashboard({ children }: { children: ReactNode }) {
+  const path = usePathname();
+  return (
+    <div className="dash">
+      <aside className="side">
+        <div className="side__logo"><Logo /></div>
+        <nav className="side__nav" aria-label="Dashboard">
+          {NAV.map(([label, href, Glyph]) => (
+            <Link key={href} href={href} aria-current={path === href ? "page" : undefined}>
+              <Glyph /><span>{label}</span>
+            </Link>
+          ))}
+        </nav>
+        <Wallet />
+      </aside>
+      <main className="dash__main">{children}</main>
+    </div>
+  );
+}
+
+function Wallet() {
   const { address, chainId, status } = useConnection();
   const { disconnect } = useDisconnect();
-  const { switchChain, isPending } = useSwitchChain();
-  if (status !== "connected") return <ConnectButtons compact />;
-  if (chainId !== settlementChain.id)
-    return (
-      <button className="btn" onClick={() => switchChain({ chainId: settlementChain.id })} disabled={isPending}>
-        {isPending ? "Switching" : "Switch to Whitechain"}
-      </button>
-    );
+  if (status !== "connected") return <div className="side__wallet"><ConnectButtons compact /></div>;
+  const wrongChain = chainId !== settlementChain.id;
   return (
-    <button className="btn btn--ghost" onClick={() => disconnect()} title="Disconnect">
-      <span className="mono">{short(address)}</span>
+    <div className="side__wallet">
+      <p className="side__net"><span className={`dot${wrongChain ? " dot--off" : ""}`} />{wrongChain ? "Wrong network" : "Whitechain Sepolia"}</p>
+      <div className="side__me">
+        <span className="mono" title={address}>{short(address)}</span>
+        <button className="side__out" onClick={() => disconnect()}>Disconnect</button>
+      </div>
+      {wrongChain && <SwitchChain />}
+    </div>
+  );
+}
+
+function SwitchChain() {
+  const { switchChain, isPending } = useSwitchChain();
+  return (
+    <button className="btn" onClick={() => switchChain({ chainId: settlementChain.id })} disabled={isPending}>
+      {isPending ? "Switching" : "Switch to Whitechain"}
     </button>
   );
 }
@@ -80,7 +109,9 @@ function WalletButton() {
 export function ConnectButtons({ compact = false }: { compact?: boolean }) {
   const connectors = useConnectors();
   const { connect, isPending, error } = useConnect();
-  const hasWallet = typeof window !== "undefined" && "ethereum" in window;
+  // Assume a wallet until mounted: the server can't see window.ethereum, and this is the first thing on screen.
+  const [hasWallet, setHasWallet] = useState(true);
+  useEffect(() => setHasWallet("ethereum" in window), []);
   if (!hasWallet && !compact)
     return <p className="msg msg--err">No browser wallet found. Install one (for example MetaMask or Rabby) and reload.</p>;
   const c = connectors[0];
@@ -108,40 +139,26 @@ export function TxStatus({ state }: { state: TxState }) {
   );
 }
 
-/** Page header in the landing page's eyebrow + display heading pattern. */
-export function PageHead({ eyebrow, title, children }: { eyebrow: string; title: ReactNode; children?: ReactNode }) {
+/** Screen title and the one line that explains it. */
+export function PageHead({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <section className="band band--rule">
-      <div className="frame page-head">
-        <p className="eyebrow">{eyebrow}</p>
-        <h1 className="display-s">{title}</h1>
-        {children && <p className="body-l">{children}</p>}
-      </div>
-    </section>
+    <header className="page-top">
+      <h1>{title}</h1>
+      {children && <p>{children}</p>}
+    </header>
   );
 }
 
-/** Wraps a page that needs a connected wallet on Whitechain Sepolia. */
+/** Hands a page the signed-in address once the wallet is on Whitechain Sepolia. Gate already keeps wallet-less visitors out. */
 export function RequireWallet({ children }: { children: (address: `0x${string}`) => ReactNode }) {
-  const { address, chainId, status } = useConnection();
-  if (status === "reconnecting" || status === "connecting") return <p className="frame empty">Checking your wallet<span className="dots" /></p>;
-  if (!address || status !== "connected")
-    return (
-      <section className="band band--rule">
-        <div className="frame panel">
-          <h2 className="title-l">Connect a wallet to continue</h2>
-          <p className="body-l" style={{ marginTop: "1.2rem" }}>Ghar reads your vault on Whitechain Sepolia and asks your wallet to sign every change.</p>
-          <div className="form-actions"><ConnectButtons /></div>
-        </div>
-      </section>
-    );
+  const { address, chainId } = useConnection();
+  if (!address) return null;
   if (chainId !== settlementChain.id)
     return (
-      <section className="band band--rule">
-        <div className="frame panel">
-          <h2 className="title-l">Switch to Whitechain Sepolia</h2>
-          <p className="body-l" style={{ marginTop: "1.2rem" }}>The vault lives on chain {settlementChain.id}. Use the button in the header to switch.</p>
-        </div>
+      <section className="card">
+        <h2 className="card__h">Switch to Whitechain Sepolia</h2>
+        <p className="card__p">The vault lives on chain {settlementChain.id}.</p>
+        <div className="form-actions"><SwitchChain /></div>
       </section>
     );
   return <>{children(address)}</>;

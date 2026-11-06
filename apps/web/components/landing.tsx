@@ -75,7 +75,7 @@ function Hero() {
           <h1 id="hero-title" className="display-xl hero__title" data-lines="load">
             <Lines>{["Pay the bills back home", "from your stablecoins"]}</Lines>
           </h1>
-          <img className="hero__art" src="/art/hero.webp" width={1040} height={589} alt="Engraved mountain peak" fetchPriority="high" />
+          <img className="hero__art" src="/art/hero.webp" width={1040} height={589} alt="Engraved family home with a tiled roof and veranda, a water tank on the terrace, coconut palms behind and a power line running in" fetchPriority="high" />
         </div>
       </section>
       <section className="band band--rule band--intro band--heroot">
@@ -109,9 +109,9 @@ function Problem() {
 }
 
 const STEPS = [
-  ["I", "Fund", "Deposit USDT into the vault once, set spending caps and name a nominee", "/art/step-1.webp", 230, 225, "Engraved surveyor's theodolite on a tripod"],
-  ["II", "Verify", "The agent pays a bill only if its biller and payout account match the payee's ENS records", "/art/step-2.webp", 265, 200, "Engraved carved marker stone"],
-  ["III", "Settle", "A licensed provider pays the bank in local currency and writes a receipt your family can read", "/art/step-3.webp", 210, 205, "Engraved stone cairn with a flag"],
+  ["I", "Fund", "Deposit USDT into the vault once, set spending caps and name a nominee", "/art/step-1.webp", 230, 175, "Engraved strongbox with a coin dropping into its slot, stacks of coins beside it"],
+  ["II", "Verify", "The agent pays a bill only if its biller and payout account match the payee's ENS records", "/art/step-2.webp", 263, 172, "Engraved bill with a wax seal, a magnifying glass showing a tick"],
+  ["III", "Settle", "A licensed provider pays the bank in local currency and writes a receipt your family can read", "/art/step-3.webp", 210, 176, "Engraved bank with columns and a pediment"],
 ] as const;
 
 function How() {
@@ -194,7 +194,7 @@ function Guarantees() {
           <p className="caps" data-fade>Whitechain Sepolia · ENSv2 Sepolia · Arkiv Rabdi · MIT</p>
         </div>
         <div className="vl guard__art">
-          <img src="/art/house.webp" width={705} height={515} alt="Engraved stone house on a cliff" data-wipe loading="lazy" />
+          <img src="/art/vault.webp" width={705} height={515} alt="Engraved round vault door with locking bolts and a spoked wheel, set in a stone wall" data-wipe loading="lazy" />
         </div>
       </div>
     </section>

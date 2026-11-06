@@ -41,6 +41,12 @@ const base = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strok
 
 // Thin line icons in the reference's stroke weight (shapes follow Lucide, MIT).
 export const Icon = {
+  home: (p: IconProps) => (
+    <svg {...base} {...p}><path d="M3 11.5 12 4l9 7.5" /><path d="M5.5 9.5V20h13V9.5" /><path d="M10 20v-6h4v6" /></svg>
+  ),
+  activity: (p: IconProps) => (
+    <svg {...base} {...p}><path d="M3 12h4l3-8 4 16 3-8h4" /></svg>
+  ),
   grant: (p: IconProps) => (
     <svg {...base} {...p}><circle cx="8" cy="15" r="4" /><path d="m10.85 12.15 8.65-8.65M18 5l2 2M15 8l2 2" /></svg>
   ),

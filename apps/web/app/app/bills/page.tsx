@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { PAYEE_BOOK_PARENT } from "@ghar/shared";
 import { PageHead } from "@/components/app/AppShell";
-import { Lines } from "@/components/ui";
 import { short, usdt, when } from "@/lib/chain";
 
 type Row = {
@@ -39,24 +38,20 @@ export default function Bills() {
     retry: false,
   });
   return (
-    <>
-      <PageHead eyebrow="Bills" title={<Lines>{["Only the real biller", "can reach the agent."]}</Lines>}>
-        Anyone can post to the public Arkiv inbox. The agent only accepts a bill from the wallet in the payee&apos;s ENS record, with a signature that matches.
-      </PageHead>
-      <section className="band band--rule">
-        <form className="frame panel" onSubmit={(e) => { e.preventDefault(); setPayee(input.trim().toLowerCase()); }}>
-          <div className="field" style={{ maxWidth: "64rem", marginTop: 0 }}>
+    <div className="page">
+      <PageHead title="Bills">Anyone can post to the public Arkiv inbox. The agent only accepts a bill from the wallet in the payee&apos;s ENS record, with a signature that matches.</PageHead>
+      <div className="stack">
+        <form className="card lookup" onSubmit={(e) => { e.preventDefault(); setPayee(input.trim().toLowerCase()); }}>
+          <div className="field">
             <label htmlFor="bp">Payee name</label>
             <input id="bp" value={input} onChange={(e) => setInput(e.target.value)} />
           </div>
-          <div className="form-actions"><button className="btn btn--ghost" disabled={!input.trim()}>Read inbox</button></div>
+          <button className="btn btn--ghost" disabled={!input.trim()}>Read inbox</button>
         </form>
-      </section>
-      <section className="band band--rule">
-        <div className="frame">
+        <section className="card card--list">
           {q.data && (
-            <div className="panel" style={{ background: "none" }}>
-              <h2 className="title-l">{q.data.payee.name}</h2>
+            <div className="card__top">
+              <h2 className="card__h">{q.data.payee.name}</h2>
               <dl className="kv"><dt>biller from ENS</dt><dd>{q.data.payee.biller}</dd></dl>
             </div>
           )}
@@ -67,18 +62,18 @@ export default function Bills() {
             <div className="list-row" key={b.key}>
               <div>
                 <div className="title">{usdt(BigInt(b.amount))} USDT</div>
-                <div className="mono" style={{ marginTop: "0.6rem" }}>{b.invoiceRef} · {b.currency}</div>
+                <div className="mono" style={{ marginTop: "0.4rem" }}>{b.invoiceRef} · {b.currency}</div>
               </div>
               <div className="body-l">
                 <span className={`tag-pill ${b.check.ok ? "tag-pill--on" : ""}`}>{b.check.ok ? "accepted" : "ignored"}</span>{" "}
                 {b.check.ok ? <>due {when(b.dueDate)}</> : REASONS[b.check.reason] ?? b.check.reason}
-                <div className="mono" style={{ marginTop: "0.6rem" }}>from {short(b.creator)}{b.note ? ` · ${b.note}` : ""}</div>
+                <div className="mono" style={{ marginTop: "0.4rem" }}>from {short(b.creator)}{b.note ? ` · ${b.note}` : ""}</div>
               </div>
               {b.receiptKey ? <Link className="link" href={`/receipt/${b.receiptKey}`}>{b.receiptStatus} receipt <span aria-hidden="true">→</span></Link> : <span />}
             </div>
           ))}
-        </div>
-      </section>
-    </>
+        </section>
+      </div>
+    </div>
   );
 }

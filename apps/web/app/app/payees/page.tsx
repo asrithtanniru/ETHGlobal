@@ -7,22 +7,17 @@ import type { Address, Hex } from "viem";
 import { useQuery } from "@tanstack/react-query";
 import { PAYEE_BOOK_PARENT, type VerifiedPayee } from "@ghar/shared";
 import { buildPayeeName, getVerifiedPayee } from "@ghar/ens";
-import { useConnection } from "wagmi";
-import { ConnectButtons, PageHead, RequireWallet, TxStatus } from "@/components/app/AppShell";
-import { Lines } from "@/components/ui";
+import { PageHead, RequireWallet, TxStatus } from "@/components/app/AppShell";
 import { useTx } from "@/components/app/useTx";
 import { chainClient, ensClient, explain, parseUsdt, period, short, usdt, vault, vaultEvents } from "@/lib/chain";
 import { nameFor, rememberName } from "@/lib/names";
 
 export default function Payees() {
   return (
-    <>
-      <PageHead eyebrow="Payees" title={<Lines>{["Only accounts a provider", "verified can be paid."]}</Lines>}>
-        Each payee is a name under {PAYEE_BOOK_PARENT}. Ghar reads its payout account and biller wallet from ENS, so neither can be typed in or swapped.
-      </PageHead>
-      <Suspense><AddPayee /></Suspense>
-      <RequireWallet>{(a) => <Book address={a} />}</RequireWallet>
-    </>
+    <div className="page">
+      <PageHead title="Payees">Each payee is a name under {PAYEE_BOOK_PARENT}. Ghar reads its payout account and biller wallet from ENS, so neither can be typed in or swapped.</PageHead>
+      <RequireWallet>{(a) => <div className="work"><Suspense><AddPayee address={a} /></Suspense><Book address={a} /></div>}</RequireWallet>
+    </div>
   );
 }
 
@@ -56,17 +51,13 @@ function Book({ address }: { address: Address }) {
     return () => window.removeEventListener("ghar:payees", again);
   }, [list.refetch]);
   return (
-    <>
-      <section className="band band--rule">
-        <div className="frame">
-          <div className="panel" style={{ background: "none" }}><h2 className="title-l">In your vault</h2></div>
-          {list.isLoading && <p className="empty">Reading payees from Whitechain<span className="dots" /></p>}
-          {list.error && <p className="empty msg--err">{explain(list.error)}</p>}
-          {list.data?.length === 0 && <p className="empty">No payees yet. Add one above.</p>}
-          {list.data?.map((r) => <PayeeRow key={r.node} r={r} address={address} onDone={() => list.refetch()} />)}
-        </div>
-      </section>
-    </>
+    <section className="card card--list">
+      <h2 className="card__h">In your vault</h2>
+      {list.isLoading && <p className="empty">Reading payees from Whitechain<span className="dots" /></p>}
+      {list.error && <p className="empty msg--err">{explain(list.error)}</p>}
+      {list.data?.length === 0 && <p className="empty">No payees yet. Look up a bill type to add your first.</p>}
+      {list.data?.map((r) => <PayeeRow key={r.node} r={r} address={address} onDone={() => list.refetch()} />)}
+    </section>
   );
 }
 
@@ -87,8 +78,7 @@ function PayeeRow({ r, address, onDone }: { r: Row; address: Address; onDone: ()
   );
 }
 
-function AddPayee() {
-  const { address, status } = useConnection();
+function AddPayee({ address }: { address: Address }) {
   const params = useSearchParams();
   const [tag, setTag] = useState(params.get("tag") ?? "");
   const [found, setFound] = useState<VerifiedPayee | null>(null);
@@ -110,41 +100,42 @@ function AddPayee() {
     } finally { setLooking(false); }
   }
   const pp = parseUsdt(per), pc = parseUsdt(cap), d = Number(days);
-  const ok = found && pp && pc && Number.isInteger(d) && d > 0 && address && status === "connected";
+  const ok = found && pp && pc && Number.isInteger(d) && d > 0;
   const perOverCap = pp !== undefined && pc !== undefined && pp > pc;
   return (
-    <section className="band band--rule">
-      <div className="frame split">
-        <form className="panel" onSubmit={(e) => { e.preventDefault(); if (tag.trim()) lookUp(); }}>
-          <h2 className="title-l">Add a payee</h2>
-          <div className="field">
-            <label htmlFor="tag">Bill type</label>
+    <div className="card work__rail">
+      <form onSubmit={(e) => { e.preventDefault(); if (tag.trim()) lookUp(); }}>
+        <h2 className="card__h">Add a payee</h2>
+        <div className="field">
+          <label htmlFor="tag">Bill type</label>
+          <div className="lookup lookup--tight">
             <input id="tag" placeholder="rent" value={tag} onChange={(e) => setTag(e.target.value)} />
-            <span className="hint">{tag.trim() ? (() => { try { return buildPayeeName(PAYEE_BOOK_PARENT, tag); } catch (e) { return String((e as Error).message); } })() : `Becomes tag.${PAYEE_BOOK_PARENT}`}</span>
+            <button className="btn" disabled={!tag.trim() || looking}>{looking ? "Reading ENS" : "Look up"}</button>
           </div>
-          <div className="form-actions"><button className="btn" disabled={!tag.trim() || looking}>{looking ? "Reading ENS" : "Look up"}</button></div>
-          <p className={lookErr ? "msg msg--err" : "msg"}>{lookErr}</p>
-        </form>
-        <form className="vl panel" onSubmit={(e) => {
+          <span className="hint">{tag.trim() ? (() => { try { return buildPayeeName(PAYEE_BOOK_PARENT, tag); } catch (e) { return String((e as Error).message); } })() : `Becomes tag.${PAYEE_BOOK_PARENT}`}</span>
+        </div>
+        <p className={lookErr ? "msg msg--err" : "msg"}>{lookErr}</p>
+      </form>
+      {found ? (
+        <form className="card__more" onSubmit={(e) => {
           e.preventDefault();
           if (ok) tx.run([{ ...vault, functionName: "setPayee", args: [namehash(found.name), found.biller, pp, pc, BigInt(d * 86400)], account: address }] as never, `${found.name} added`);
         }}>
-          <h2 className="title-l">{found ? found.name : "Verified records"}</h2>
-          {found ? (
-            <dl className="kv">
-              <dt>payout</dt><dd>{found.payoutRef}</dd>
-              <dt>biller</dt><dd>{found.biller}</dd>
-            </dl>
-          ) : (
-            <p className="body-l" style={{ marginTop: "1.2rem" }}>Look up a bill type to read its payout account and biller from ENS on Sepolia.</p>
-          )}
-          <div className="field"><label htmlFor="per">Cap per bill (USDT)</label><input id="per" inputMode="decimal" placeholder="150" value={per} onChange={(e) => setPer(e.target.value)} disabled={!found} /></div>
-          <div className="field"><label htmlFor="cap">Cap per period (USDT)</label><input id="cap" inputMode="decimal" placeholder="300" value={cap} onChange={(e) => setCap(e.target.value)} disabled={!found} />{perOverCap && <span className="hint">The per-period cap limits each bill too, so bills above {cap} USDT can't be paid.</span>}</div>
-          <div className="field"><label htmlFor="days">Period (days)</label><input id="days" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} disabled={!found} /></div>
-          <div className="form-actions">{address ? <button className="btn" disabled={!ok || tx.busy}>Add to vault</button> : found && <ConnectButtons compact />}</div>
-          <TxStatus state={tx.state} />
+          <h3 className="card__h">{found.name}</h3>
+          <dl className="kv">
+            <dt>payout</dt><dd>{found.payoutRef}</dd>
+            <dt>biller</dt><dd>{found.biller}</dd>
+          </dl>
+          <div className="fields2">
+            <div className="field"><label htmlFor="per">Cap per bill (USDT)</label><input id="per" inputMode="decimal" placeholder="150" value={per} onChange={(e) => setPer(e.target.value)} /></div>
+            <div className="field"><label htmlFor="cap">Cap per period (USDT)</label><input id="cap" inputMode="decimal" placeholder="300" value={cap} onChange={(e) => setCap(e.target.value)} /></div>
+          </div>
+          {perOverCap && <p className="hint hint--block">The per-period cap limits each bill too, so bills above {cap} USDT can&apos;t be paid.</p>}
+          <div className="field"><label htmlFor="days">Period (days)</label><input id="days" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} /></div>
+          <div className="form-actions"><button className="btn" disabled={!ok || tx.busy}>Add to vault</button></div>
         </form>
-      </div>
-    </section>
+      ) : <p className="card__p">Look up a bill type to read its payout account and biller from ENS on Sepolia.</p>}
+      <TxStatus state={tx.state} />
+    </div>
   );
 }

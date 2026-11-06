@@ -7,7 +7,6 @@ import { useConnection } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
 import { PAYEE_BOOK_PARENT } from "@ghar/shared";
 import { PageHead, TxStatus } from "@/components/app/AppShell";
-import { Lines } from "@/components/ui";
 import { useTx } from "@/components/app/useTx";
 import { chainClient, explain, explorerTx, short, usdt, vault, vaultEvents, when } from "@/lib/chain";
 import { nameFor } from "@/lib/names";
@@ -26,31 +25,26 @@ export default function Activity() {
   const [payee, setPayee] = useState<string | null>(null);
   const [err, setErr] = useState("");
   return (
-    <>
-      <PageHead eyebrow="Activity" title={<Lines>{["Every payout,", "from request to receipt."]}</Lines>}>
-        Read straight from the vault&apos;s events on Whitechain Sepolia. Senders see their payouts; anyone can look up the payouts made to a payee name.
-      </PageHead>
-      <section className="band band--rule">
-        <form className="frame panel" onSubmit={(e) => {
+    <div className="page">
+      <PageHead title="Activity">Read straight from the vault&apos;s events on Whitechain Sepolia. Senders see their payouts; anyone can look up the payouts made to a payee name.</PageHead>
+      <div className="stack">
+        <form className="card lookup" onSubmit={(e) => {
           e.preventDefault();
           try { setPayee(normalize(payeeInput.trim())); setErr(""); } catch { setErr("That isn't a valid name."); }
         }}>
-          <h2 className="title-l">Payee view</h2>
-          <div className="field" style={{ maxWidth: "64rem" }}>
+          <div className="field">
             <label htmlFor="pn">Payee name</label>
             <input id="pn" placeholder={`rent.${PAYEE_BOOK_PARENT}`} value={payeeInput} onChange={(e) => setPayeeInput(e.target.value)} />
           </div>
-          <div className="form-actions">
-            <button className="btn btn--ghost" disabled={!payeeInput.trim()}>Show payouts to this payee</button>
-            {payee && <button type="button" className="link" onClick={() => { setPayee(null); setPayeeInput(""); }}>Back to my payouts</button>}
-          </div>
-          <p className={err ? "msg msg--err" : "msg"}>{err}</p>
+          <button className="btn btn--ghost" disabled={!payeeInput.trim()}>Show payouts to this payee</button>
+          {payee && <button type="button" className="link" onClick={() => { setPayee(null); setPayeeInput(""); }}>Back to my payouts</button>}
+          {err && <p className="msg msg--err">{err}</p>}
         </form>
-      </section>
-      {payee ? <Payouts filter={{ payee: namehash(payee) }} title={payee} />
-        : address ? <Payouts filter={{ sender: address }} title="Your payouts" me={address} />
-        : <section className="band band--rule"><p className="frame empty">Connect a wallet in the header to see your own payouts, or look up a payee above.</p></section>}
-    </>
+        {payee ? <Payouts filter={{ payee: namehash(payee) }} title={payee} />
+          : address ? <Payouts filter={{ sender: address }} title="Your payouts" me={address} />
+          : <section className="card card--list"><p className="empty">Connect a wallet to see your own payouts, or look up a payee above.</p></section>}
+      </div>
+    </div>
   );
 }
 
@@ -75,14 +69,12 @@ function Payouts({ filter, title, me }: { filter: { sender?: Address; payee?: He
     },
   });
   return (
-    <section className="band band--rule">
-      <div className="frame">
-        <div className="panel" style={{ background: "none" }}><h2 className="title-l">{title}</h2></div>
+    <section className="card card--list">
+      <h2 className="card__h">{title}</h2>
         {q.isLoading && <p className="empty">Reading payouts from Whitechain<span className="dots" /></p>}
         {q.error && <p className="empty msg--err">{explain(q.error)}</p>}
         {q.data?.length === 0 && <p className="empty">No payouts yet. The agent requests one when it pays a verified, signed bill.</p>}
         {q.data?.map((p) => <PayoutRow key={p.digest} p={p} me={me} onDone={() => q.refetch()} />)}
-      </div>
     </section>
   );
 }
