@@ -1,0 +1,13 @@
+{
+  "name": "ghar-payout-adapter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.mjs",
+    "payee": "node setup-payee.mjs"
+  },
+  "dependencies": {
+    "dotenv": "16.4.5",
+    "viem": "2.21.55"
+  }
+}

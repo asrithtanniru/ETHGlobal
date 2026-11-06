@@ -14,9 +14,9 @@ People working abroad are often paid in USDT or USDC, while the bills they cover
 2. Payees post bills to the Arkiv inbox from their own wallet.
 3. The agent reads open bills for each payee.
 4. The agent checks the payee's ENS name: the bill's creator must match the `biller` record, and the `payout` record must be set by the provider.
-5. The agent calls `pay(bill)` on the vault, which checks caps and the biller before moving funds.
-6. The vault sends USDT to the licensed payout provider, tagged with the order.
-7. The provider pays the payee's bank account in local currency and writes a receipt to Arkiv.
+5. The agent calls `pay(bill)` on the vault, which checks caps and the biller, then locks the amount for the provider.
+6. The licensed payout provider pays the payee's bank account in local currency and writes a receipt to Arkiv.
+7. The provider calls `markPaid` to take the locked USDT, or `refund` to return it to the sender's balance. If the provider does nothing for a day, anyone can call `reclaim` to return it to the sender.
 
 ## Components
 

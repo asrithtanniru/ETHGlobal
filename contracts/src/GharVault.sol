@@ -44,9 +44,14 @@ contract GharVault is ReentrancyGuard, EIP712 {
     /// @notice Settlement token (USDT on Whitechain).
     IERC20 public immutable usdt;
 
-    /// @notice Licensed payout provider. Every bill payment goes here and nowhere else.
+    /// @notice Licensed payout provider. Every bill payment goes here and nowhere else, and
+    ///         only this address can settle a pending payout.
     /// @dev Immutable on purpose: no admin can redirect funds. A new provider means a new vault.
     address public immutable provider;
+
+    /// @notice How long the provider has to settle a payout before anyone can return the
+    ///         USDT to the sender's balance.
+    uint256 public constant SETTLE_WINDOW = 1 days;
 
     /// @notice USDT held for each sender, in token base units.
     mapping(address sender => uint256 amount) public balanceOf;
@@ -61,9 +66,25 @@ contract GharVault is ReentrancyGuard, EIP712 {
     ///         the payee's ENS `biller` record. The provider re-checks ENS before paying out.
     mapping(address sender => mapping(bytes32 payee => address)) public billerOf;
 
-    /// @notice Bills already paid, by EIP-712 digest. Global, so two senders covering the
-    ///         same payee cannot both pay one bill.
-    mapping(bytes32 digest => bool) public paid;
+    enum PayoutStatus {
+        None,
+        Pending,
+        Paid,
+        Refunded
+    }
+
+    /// @notice USDT locked for one bill while the provider pays out in local currency.
+    struct Payout {
+        address sender;
+        uint64 requestedAt;
+        PayoutStatus status;
+        uint256 amount;
+    }
+
+    /// @notice Payout for each bill, by EIP-712 digest. Global, so two senders covering the
+    ///         same payee cannot both pay one bill. A refunded bill stays used: the biller
+    ///         signs a new one to retry.
+    mapping(bytes32 digest => Payout) public payoutOf;
 
     /// @notice Who may take over a sender's balance, and after how long without activity.
     struct Nominee {
@@ -101,7 +122,7 @@ contract GharVault is ReentrancyGuard, EIP712 {
         address indexed sender, address indexed nominee, address to, uint256 amount
     );
     /// @notice The provider reads this to pay the payee's verified account in local currency.
-    event Paid(
+    event PayoutRequested(
         address indexed sender,
         bytes32 indexed payee,
         bytes32 indexed digest,
@@ -109,6 +130,12 @@ contract GharVault is ReentrancyGuard, EIP712 {
         uint256 amount,
         address agent
     );
+    /// @notice The payee was paid. `providerRef` is the provider's order id.
+    event PayoutCompleted(bytes32 indexed digest, string providerRef);
+    /// @notice The provider could not pay out; the USDT is back in the sender's balance.
+    event PayoutRefunded(bytes32 indexed digest, string reason);
+    /// @notice The provider did not settle in time; the USDT is back in the sender's balance.
+    event PayoutReclaimed(bytes32 indexed digest);
 
     error ZeroAddress();
     error ZeroAmount();
@@ -125,6 +152,9 @@ contract GharVault is ReentrancyGuard, EIP712 {
     error InvalidNominee();
     error NotNominee();
     error NomineeLocked(uint256 unlocksAt);
+    error NotProvider();
+    error NotPending();
+    error SettleWindowOpen(uint256 closesAt);
 
     /// @dev Records that the sender is alive. Agent payments never call this, so a silent
     ///      sender's bills keep getting paid while the nominee timer still runs out.
@@ -225,8 +255,9 @@ contract GharVault is ReentrancyGuard, EIP712 {
         emit PayeeRemoved(msg.sender, payee);
     }
 
-    /// @notice Pays a biller-signed bill from `sender`'s balance to the provider. Only an agent
-    ///         `sender` granted can call this, and only within the grant and the payee's caps.
+    /// @notice Locks a biller-signed bill's amount from `sender`'s balance for the provider to
+    ///         pay out. Only an agent `sender` granted can call this, and only within the grant
+    ///         and the payee's caps.
     function pay(address sender, Bill calldata bill, bytes calldata signature)
         external
         nonReentrant
@@ -237,7 +268,7 @@ contract GharVault is ReentrancyGuard, EIP712 {
         if (block.timestamp > bill.dueDate) revert BillExpired(bill.dueDate);
 
         bytes32 digest = billDigest(bill);
-        if (paid[digest]) revert AlreadyPaid();
+        if (payoutOf[digest].status != PayoutStatus.None) revert AlreadyPaid();
         if (!SignatureChecker.isValidSignatureNow(billerOf[sender][bill.payee], digest, signature))
         {
             revert InvalidSignature();
@@ -246,10 +277,38 @@ contract GharVault is ReentrancyGuard, EIP712 {
         uint256 available = balanceOf[sender];
         if (bill.amount > available) revert InsufficientBalance(available, bill.amount);
         balanceOf[sender] = available - bill.amount;
-        paid[digest] = true;
+        payoutOf[digest] =
+            Payout(sender, uint64(block.timestamp), PayoutStatus.Pending, bill.amount);
+        emit PayoutRequested(sender, bill.payee, digest, bill.invoiceRef, bill.amount, msg.sender);
+    }
 
-        usdt.safeTransfer(provider, bill.amount);
-        emit Paid(sender, bill.payee, digest, bill.invoiceRef, bill.amount, msg.sender);
+    /// @notice Provider confirms the payee was paid and takes the locked USDT.
+    function markPaid(bytes32 digest, string calldata providerRef) external nonReentrant {
+        Payout storage p = _pendingForProvider(digest);
+        p.status = PayoutStatus.Paid;
+        usdt.safeTransfer(provider, p.amount);
+        emit PayoutCompleted(digest, providerRef);
+    }
+
+    /// @notice Provider could not pay out, so the USDT goes back to the sender's balance.
+    /// @dev Caps already charged for the bill stay charged.
+    function refund(bytes32 digest, string calldata reason) external {
+        Payout storage p = _pendingForProvider(digest);
+        p.status = PayoutStatus.Refunded;
+        balanceOf[p.sender] += p.amount;
+        emit PayoutRefunded(digest, reason);
+    }
+
+    /// @notice If the provider has not settled within SETTLE_WINDOW, anyone can return the USDT
+    ///         to the sender's balance. It can only ever go back to the sender.
+    function reclaim(bytes32 digest) external {
+        Payout storage p = payoutOf[digest];
+        if (p.status != PayoutStatus.Pending) revert NotPending();
+        uint256 closesAt = uint256(p.requestedAt) + SETTLE_WINDOW;
+        if (block.timestamp < closesAt) revert SettleWindowOpen(closesAt);
+        p.status = PayoutStatus.Refunded;
+        balanceOf[p.sender] += p.amount;
+        emit PayoutReclaimed(digest);
     }
 
     /// @notice EIP-712 digest the biller signs. Bound to this vault and chain.
@@ -269,6 +328,12 @@ contract GharVault is ReentrancyGuard, EIP712 {
     /// @notice How much `sender` can still pay `payee` in one payment right now.
     function availableToPayee(address sender, bytes32 payee) external view returns (uint256) {
         return _available(payeeOf[sender][payee]);
+    }
+
+    function _pendingForProvider(bytes32 digest) private view returns (Payout storage p) {
+        if (msg.sender != provider) revert NotProvider();
+        p = payoutOf[digest];
+        if (p.status != PayoutStatus.Pending) revert NotPending();
     }
 
     function _withdraw(address sender, uint256 amount, address to) private {

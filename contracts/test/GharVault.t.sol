@@ -391,17 +391,130 @@ contract GharVaultPayTest is Test {
         vault.pay(sender, bill, sig);
     }
 
-    function test_PaySendsToProvider() public {
+    function _status(bytes32 digest) internal view returns (GharVault.PayoutStatus status) {
+        (,, status,) = vault.payoutOf(digest);
+    }
+
+    /// Pays a 500 USDT bill and returns its digest, leaving the payout pending.
+    function _payPending() internal returns (bytes32 digest) {
+        GharVault.Bill memory bill = _bill(500e6);
+        digest = vault.billDigest(bill);
+        _pay(bill, _sign(billerKey, bill));
+    }
+
+    function test_PayLocksUntilProviderSettles() public {
         GharVault.Bill memory bill = _bill(500e6);
         bytes32 digest = vault.billDigest(bill);
 
         vm.expectEmit(address(vault));
-        emit GharVault.Paid(sender, RENT, digest, bill.invoiceRef, 500e6, agent);
+        emit GharVault.PayoutRequested(sender, RENT, digest, bill.invoiceRef, 500e6, agent);
         _pay(bill, _sign(billerKey, bill));
+
+        (address who, uint64 requestedAt, GharVault.PayoutStatus status, uint256 amount) =
+            vault.payoutOf(digest);
+        assertEq(who, sender);
+        assertEq(requestedAt, block.timestamp);
+        assertEq(uint8(status), uint8(GharVault.PayoutStatus.Pending));
+        assertEq(amount, 500e6);
+        assertEq(usdt.balanceOf(provider), 0);
+        assertEq(usdt.balanceOf(address(vault)), 1000e6);
+        assertEq(vault.balanceOf(sender), 500e6);
+    }
+
+    function test_MarkPaidSendsToProvider() public {
+        bytes32 digest = _payPending();
+        vm.expectEmit(address(vault));
+        emit GharVault.PayoutCompleted(digest, "order-1");
+        vm.prank(provider);
+        vault.markPaid(digest, "order-1");
 
         assertEq(usdt.balanceOf(provider), 500e6);
         assertEq(vault.balanceOf(sender), 500e6);
-        assertTrue(vault.paid(digest));
+        assertEq(uint8(_status(digest)), uint8(GharVault.PayoutStatus.Paid));
+    }
+
+    function test_RefundReturnsToSenderBalance() public {
+        bytes32 digest = _payPending();
+        vm.expectEmit(address(vault));
+        emit GharVault.PayoutRefunded(digest, "bank rejected");
+        vm.prank(provider);
+        vault.refund(digest, "bank rejected");
+
+        assertEq(vault.balanceOf(sender), 1000e6);
+        assertEq(usdt.balanceOf(provider), 0);
+        assertEq(uint8(_status(digest)), uint8(GharVault.PayoutStatus.Refunded));
+        // Caps stay charged for the refunded bill.
+        assertEq(vault.availableToPayee(sender, RENT), 500e6);
+    }
+
+    function test_RevertWhen_NotProviderSettles() public {
+        bytes32 digest = _payPending();
+        vm.startPrank(agent);
+        vm.expectRevert(GharVault.NotProvider.selector);
+        vault.markPaid(digest, "order-1");
+        vm.expectRevert(GharVault.NotProvider.selector);
+        vault.refund(digest, "x");
+        vm.stopPrank();
+    }
+
+    function test_RevertWhen_SettledTwice() public {
+        bytes32 digest = _payPending();
+        vm.startPrank(provider);
+        vault.markPaid(digest, "order-1");
+        vm.expectRevert(GharVault.NotPending.selector);
+        vault.markPaid(digest, "order-1");
+        vm.expectRevert(GharVault.NotPending.selector);
+        vault.refund(digest, "x");
+        vm.stopPrank();
+    }
+
+    function test_RevertWhen_SettlingUnknownBill() public {
+        vm.prank(provider);
+        vm.expectRevert(GharVault.NotPending.selector);
+        vault.markPaid(keccak256("nothing"), "order-1");
+    }
+
+    function test_RefundedBillCannotBePaidAgain() public {
+        GharVault.Bill memory bill = _bill(100e6);
+        bytes memory sig = _sign(billerKey, bill);
+        _pay(bill, sig);
+        bytes32 digest = vault.billDigest(bill);
+        vm.prank(provider);
+        vault.refund(digest, "x");
+        vm.expectRevert(GharVault.AlreadyPaid.selector);
+        _pay(bill, sig);
+    }
+
+    function test_AnyoneReclaimsAfterSettleWindow() public {
+        bytes32 digest = _payPending();
+        uint256 closesAt = block.timestamp + vault.SETTLE_WINDOW();
+
+        vm.warp(closesAt - 1);
+        vm.expectRevert(abi.encodeWithSelector(GharVault.SettleWindowOpen.selector, closesAt));
+        vault.reclaim(digest);
+
+        vm.warp(closesAt);
+        vm.expectEmit(address(vault));
+        emit GharVault.PayoutReclaimed(digest);
+        vm.prank(sibling);
+        vault.reclaim(digest);
+
+        assertEq(vault.balanceOf(sender), 1000e6);
+        assertEq(vault.balanceOf(sibling), 0);
+        assertEq(uint8(_status(digest)), uint8(GharVault.PayoutStatus.Refunded));
+
+        vm.prank(provider);
+        vm.expectRevert(GharVault.NotPending.selector);
+        vault.markPaid(digest, "late");
+    }
+
+    function test_RevertWhen_ReclaimingSettledPayout() public {
+        bytes32 digest = _payPending();
+        vm.prank(provider);
+        vault.markPaid(digest, "order-1");
+        vm.warp(block.timestamp + vault.SETTLE_WINDOW());
+        vm.expectRevert(GharVault.NotPending.selector);
+        vault.reclaim(digest);
     }
 
     /// Off-chain signers (viem signTypedData) must produce this exact digest.
