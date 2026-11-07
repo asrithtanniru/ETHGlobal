@@ -7,6 +7,7 @@ import type { Address, Hex } from "viem";
 import { useQuery } from "@tanstack/react-query";
 import { PAYEE_BOOK_PARENT, type VerifiedPayee } from "@ghar/shared";
 import { buildPayeeName, getVerifiedPayee } from "@ghar/ens";
+import { Coin } from "@/components/ui";
 import { PageHead, RequireWallet, TxStatus } from "@/components/app/AppShell";
 import { useTx } from "@/components/app/useTx";
 import { activePayees, chainClient, ensClient, explain, parseUsdt, period, short, usdt, vault } from "@/lib/chain";
@@ -64,7 +65,7 @@ function PayeeRow({ r, address, onDone }: { r: Row; address: Address; onDone: ()
         <div className="mono" style={{ marginTop: "0.6rem" }}>biller {short(r.biller)}</div>
       </div>
       <div className="body-l">
-        Up to {usdt(r.perPayment)} per bill, {usdt(r.perPeriod)} per {period(r.period)} · <span style={{ color: "var(--ink)" }}>{usdt(r.available)} USDT</span> payable now
+        Up to {usdt(r.perPayment)} per bill, {usdt(r.perPeriod)} per {period(r.period)} · <span style={{ color: "var(--ink)" }}>{usdt(r.available)} <Coin c="USDT" />USDT</span> payable now
         <TxStatus state={tx.state} />
       </div>
       <button className="btn btn--ghost" disabled={tx.busy} onClick={() => tx.run([{ ...vault, functionName: "removePayee", args: [r.node], account: address }] as never, "Payee removed")}>Remove</button>

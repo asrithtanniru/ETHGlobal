@@ -7,6 +7,7 @@ import { isHash, type Address, type Hex } from "viem";
 import { namehash } from "viem/ens";
 import { useQuery } from "@tanstack/react-query";
 import { useReadContracts } from "wagmi";
+import { Coin } from "@/components/ui";
 import { PageHead, RequireWallet, TxStatus } from "@/components/app/AppShell";
 import { Bill } from "@/components/app/Chat";
 import { useChatSession } from "@/components/app/chatSession";
@@ -76,7 +77,7 @@ function PayBill({ address, digest }: { address: Address; digest: Hex }) {
             {inVault ? <>{payee} is in your vault</> : <><Link className="inline" href={`/app/payees?tag=${tag}&family=${family}`}>Add {payee} to your vault</Link> with caps that cover this bill</>}
           </li>
           <li className={balance !== undefined && !short_ ? "ok" : ""}>
-            {balance === undefined ? "Checking your vault balance" : short_ ? <>Your vault needs {usdt(short_)} USDT more <TopUp address={address} amount={short_ < gaslessMin ? gaslessMin : short_} onDone={() => ready.refetch()} /></> : <>Your vault holds {usdt(balance)} USDT</>}
+            {balance === undefined ? "Checking your vault balance" : short_ ? <>Your vault needs {usdt(short_)} USDT more <TopUp address={address} amount={short_ < gaslessMin ? gaslessMin : short_} onDone={() => ready.refetch()} /></> : <>Your vault holds {usdt(balance)} <Coin c="USDT" />USDT</>}
           </li>
           <li className={canSpend !== undefined && canSpend >= amount ? "ok" : ""}>
             {!agent ? "Chat payments aren't set up on this server"

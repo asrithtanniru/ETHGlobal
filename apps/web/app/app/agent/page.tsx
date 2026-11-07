@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { isAddress, type Address } from "viem";
 import { useQuery } from "@tanstack/react-query";
+import { Coin } from "@/components/ui";
 import { PageHead, RequireWallet, TxStatus } from "@/components/app/AppShell";
 import { useTx } from "@/components/app/useTx";
 import { chainClient, explain, parseUsdt, period, short, usdt, vault, vaultEvents } from "@/lib/chain";
@@ -55,7 +56,7 @@ function GrantRow({ g, address, onDone }: { g: Grant; address: Address; onDone: 
     <div className="list-row">
       <div className="mono" style={{ color: "var(--ink)" }} title={g.agent}>{short(g.agent)}</div>
       <div className="body-l">
-        Up to {usdt(g.perPayment)} per bill, {usdt(g.perPeriod)} per {period(g.period)} · <span style={{ color: "var(--ink)" }}>{usdt(g.available)} USDT</span> spendable now
+        Up to {usdt(g.perPayment)} per bill, {usdt(g.perPeriod)} per {period(g.period)} · <span style={{ color: "var(--ink)" }}>{usdt(g.available)} <Coin c="USDT" />USDT</span> spendable now
         <TxStatus state={tx.state} />
       </div>
       <button className="btn btn--ghost" disabled={tx.busy} onClick={() => tx.run([{ ...vault, functionName: "revokeGrant", args: [g.agent], account: address }] as never, "Grant revoked")}>Revoke</button>

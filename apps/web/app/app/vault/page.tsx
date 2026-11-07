@@ -5,6 +5,7 @@ import Link from "next/link";
 import { erc20Abi, type Address } from "viem";
 import { useReadContract, useReadContracts } from "wagmi";
 import { GHAR_VAULT, USDT, settlementChain } from "@ghar/shared";
+import { Coin } from "@/components/ui";
 import { PageHead, RequireWallet, TxStatus } from "@/components/app/AppShell";
 import { useTx, type TxState } from "@/components/app/useTx";
 import { depositWithoutGas, gaslessMin, useGasless } from "@/components/app/gasless";
@@ -39,11 +40,11 @@ function Vault({ address }: { address: Address }) {
       <section className="balances" aria-label="Balances">
         <div>
           <p className="balances__k">In your vault</p>
-          <div className="stat-n">{usdt(vaultBal as bigint | undefined)}<small>USDT</small></div>
+          <div className="stat-n">{usdt(vaultBal as bigint | undefined)}<small><Coin c="USDT" />USDT</small></div>
         </div>
         <div>
           <p className="balances__k">In your wallet</p>
-          <div className="stat-n">{usdt(walletBal as bigint | undefined)}<small>USDT</small></div>
+          <div className="stat-n">{usdt(walletBal as bigint | undefined)}<small><Coin c="USDT" />USDT</small></div>
           <p className="balances__note mono">{short(address)}</p>
         </div>
         <div>

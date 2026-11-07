@@ -91,3 +91,11 @@ export const Icon = {
     <svg {...base} strokeWidth={1.8} {...p}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
   ),
 };
+
+const COINS: Record<string, string> = { USDT: "/icons/usdt.svg", INR: "/icons/inr.svg" };
+
+/** Round mark beside a currency code. Decorative: the code next to it is what screen readers get. */
+export function Coin({ c }: { c: string }) {
+  const src = COINS[c];
+  return src ? <img className="coin" src={src} alt="" width={16} height={16} /> : null;
+}

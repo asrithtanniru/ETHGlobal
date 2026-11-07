@@ -1,18 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { PAYEE_BOOK_PARENT } from "@ghar/shared";
-import { Icon, Lines } from "./ui";
+import { Coin, Icon, Lines } from "./ui";
 
 type Cap = "grant" | "reclaim" | "signed" | "payee" | "cap" | "nominee";
 
 // Illustrative sample bill for the landing page; the card header says so.
-const ROWS: { k: string; v: string; cap?: Cap; live?: boolean }[] = [
+const ROWS: { k: string; v: ReactNode; cap?: Cap; live?: boolean }[] = [
   { k: "payee", v: `rent.${PAYEE_BOOK_PARENT}`, cap: "payee" },
   { k: "invoice", v: "INV-0412" },
-  { k: "amount", v: "120.00 USDT · paid out in INR" },
+  { k: "amount", v: <>120.00 <Coin c="USDT" />USDT · paid out in <Coin c="INR" />INR</> },
   { k: "biller", v: "0x8a3…c21 · matches ENS record", cap: "signed" },
-  { k: "cap", v: "380 of 500 USDT left · 30 days", cap: "cap" },
+  { k: "cap", v: <>380 of 500 <Coin c="USDT" />USDT left · 30 days</>, cap: "cap" },
   { k: "payout", v: "verified by provider · ref ••4417" },
   { k: "status", v: "paying", cap: "grant", live: true },
   { k: "settle", v: "provider has 24 h, then reclaimable", cap: "reclaim" },

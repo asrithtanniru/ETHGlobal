@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { PAYEE_BOOK_PARENT } from "@ghar/shared";
+import { Coin } from "@/components/ui";
 import { PageHead } from "@/components/app/AppShell";
 import { short, usdt, when } from "@/lib/chain";
 import { reason } from "@/lib/reasons";
@@ -57,7 +58,7 @@ function BillsInbox() {
           {q.data?.bills.map((b) => (
             <div className="list-row" key={b.key}>
               <div>
-                <div className="title">{usdt(BigInt(b.amount))} USDT</div>
+                <div className="title">{usdt(BigInt(b.amount))} <Coin c="USDT" />USDT</div>
                 <div className="mono" style={{ marginTop: "0.4rem" }}>{b.invoiceRef} · {b.currency}</div>
               </div>
               <div className="body-l">

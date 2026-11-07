@@ -11,6 +11,7 @@ import { signTypedData, switchChain } from "wagmi/actions";
 import { PAYEE_BOOK_PARENT, settlementChain } from "@ghar/shared";
 import { buildPayeeName, getVerifiedPayee } from "@ghar/ens";
 import { billDigest, billEntity, billTypedData, GharBill } from "@ghar/arkiv";
+import { Coin } from "@/components/ui";
 import { PageHead, TxStatus } from "@/components/app/AppShell";
 import type { TxState } from "@/components/app/useTx";
 import { ensClient, explain, parseUsdt, short, wagmiConfig } from "@/lib/chain";
@@ -136,7 +137,7 @@ function BillForm({ address, getProvider }: { address: Address; getProvider: () 
             <input id="rb-ref" className="mono" placeholder="FEES-2026-02" maxLength={64} value={invoiceRef} onChange={(e) => setInvoiceRef(e.target.value)} />
           </div>
           <div className="field">
-            <label htmlFor="rb-cur">Local currency</label>
+            <label htmlFor="rb-cur"><Coin c={currency} />Local currency</label>
             <input id="rb-cur" className="mono" maxLength={3} value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} />
           </div>
         </div>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { isAddress, type Address } from "viem";
 import { useConnection, useReadContracts } from "wagmi";
+import { Coin } from "@/components/ui";
 import { PageHead, RequireWallet, TxStatus } from "@/components/app/AppShell";
 import { useTx } from "@/components/app/useTx";
 import { parseUsdt, short, usdt, vault, when } from "@/lib/chain";
@@ -88,7 +89,7 @@ function ActAsNominee({ address }: { address: Address }) {
           <div>
             {valid && nom && (
               <dl className="kv">
-                <dt>balance</dt><dd>{usdt(bal)} USDT</dd>
+                <dt>balance</dt><dd>{usdt(bal)} <Coin c="USDT" />USDT</dd>
                 <dt>nominee</dt><dd>{nom[0] === ZERO ? "none" : mine ? "this wallet" : short(nom[0])}</dd>
                 {unlocksAt !== undefined && nom[0] !== ZERO && <><dt>unlocks</dt><dd>{when(unlocksAt)}{open ? " · open now" : ""}</dd></>}
               </dl>

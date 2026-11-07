@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { Logo } from "@/components/ui";
+import { Coin, Logo } from "@/components/ui";
 import type { ClaimView } from "@/lib/directShared";
 
 const short = (h?: string) => (h ? `${h.slice(0, 6)}…${h.slice(-4)}` : "");
@@ -67,8 +67,8 @@ function Claim() {
       {view && (
         <section className="card claim__card">
           <p className="mono claim__k">{view.status === "paid" ? "PAID OUT" : view.status === "refunded" ? "REFUNDED" : "MONEY SENT TO YOU"}</p>
-          <p className="claim__amt">{view.amountUsdt}<small>USDT</small></p>
-          <p className="card__p">From <span className="mono">{view.from}</span>, to claim as <b>{view.currency}</b> {inr ? "to your UPI ID" : "to your card or bank"}.</p>
+          <p className="claim__amt">{view.amountUsdt}<small><Coin c="USDT" />USDT</small></p>
+          <p className="card__p">From <span className="mono">{view.from}</span>, to claim as <b><Coin c={view.currency} />{view.currency}</b> {inr ? "to your UPI ID" : "to your card or bank"}.</p>
           {view.status === "unpaid" && <p className="msg">The sender hasn&apos;t finished sending this yet.</p>}
           {waiting && (view.expired
             ? <p className="msg msg--err">This claim link has expired. Ask the sender to send again; their money goes back to their vault.</p>
