@@ -124,22 +124,31 @@ export async function chatStream(
 ) {
   const failures: string[] = [];
   for (const endpoint of endpoints) {
-    let streamed = false;
-    try {
-      const response = await fetchFn(`${endpoint.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${endpoint.apiKey}`, "content-type": "application/json" },
-        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000),
-        body: JSON.stringify({
-          model: endpoint.model, temperature: 0.2, max_completion_tokens: 2048, reasoning_effort: "low", reasoning_format: "hidden",
-          stream: true, messages, ...(tools.length ? { tools, tool_choice: "auto" } : {}),
-        }),
-      });
-      if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
-      return await readChatStream(response.body, (d) => { streamed = true; onText(d); });
-    } catch (e) {
-      if (streamed || signal?.aborted) throw e;
-      failures.push(`${endpoint.name}: ${e instanceof Error ? e.message : "failed"}`);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let streamed = false;
+      try {
+        const response = await fetchFn(`${endpoint.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${endpoint.apiKey}`, "content-type": "application/json" },
+          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000),
+          body: JSON.stringify({
+            model: endpoint.model, temperature: 0.2, max_completion_tokens: 2048, reasoning_effort: "low", reasoning_format: "hidden",
+            stream: true, messages, ...(tools.length ? { tools, tool_choice: "auto" } : {}),
+          }),
+        });
+        // A per-minute token limit (Groq's is per organization, so every key hits it): wait out a short retry-after once.
+        const wait = Number(response.headers.get("retry-after"));
+        if (response.status === 429 && attempt === 0 && wait > 0 && wait <= 20) {
+          await new Promise((s) => setTimeout(s, wait * 1000));
+          continue;
+        }
+        if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+        return await readChatStream(response.body, (d) => { streamed = true; onText(d); });
+      } catch (e) {
+        if (streamed || signal?.aborted) throw e;
+        failures.push(`${endpoint.name}: ${e instanceof Error ? e.message : "failed"}`);
+        break;
+      }
     }
   }
   throw new Error(`all LLM endpoints failed (${failures.join("; ") || "none configured"})`);

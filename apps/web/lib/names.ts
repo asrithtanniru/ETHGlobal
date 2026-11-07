@@ -6,7 +6,7 @@ import { buildPayeeName } from "@ghar/ens";
 // The vault stores payees as namehashes, which can't be reversed. Names are recovered from common
 // bill tags plus every name this browser has looked up.
 // shortcut: per-browser memory only; upgrade to an ENS subname listing once the payee book has one.
-export const COMMON = ["rent", "school-fees", "clinic", "electricity", "water", "internet", "phone", "groceries"];
+export const COMMON = ["rent", "school-fees", "university", "clinic", "electricity", "water", "internet", "phone", "groceries", "direct"];
 const KEY = "ghar.names";
 
 function stored(): Record<string, string> {

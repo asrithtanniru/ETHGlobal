@@ -107,7 +107,13 @@ async function vaultOverview(sender: Address, known: string[]) {
   };
 }
 
-async function checkBills(sender: Address, payeeName: string, known: string[]) {
+/** What a bill is to the sender: the vault's payout status, read from the chain. */
+const BILL_STATUS = ["unpaid", "paying-out", "paid", "refunded"] as const;
+type BillStatus = (typeof BILL_STATUS)[number];
+export type BillFilter = "unpaid" | "paid" | "refunded" | "all";
+const shows = (f: BillFilter, s: BillStatus) => f === "all" || s === f || (f === "paid" && s === "paying-out");
+
+async function checkBills(sender: Address, payeeName: string, known: string[], filter: BillFilter = "unpaid") {
   const raw = payeeName.trim().toLowerCase();
   let name: string;
   try { name = raw.includes(".") ? raw : buildPayeeName(PAYEE_BOOK_PARENT, raw); } catch { return { model: { error: "not-a-payee-name" }, cards: [] }; }
@@ -126,25 +132,35 @@ async function checkBills(sender: Address, payeeName: string, known: string[]) {
   const view = await vaultView(sender, namehash(payee.name), agent.address);
   const keys = parseKeys(process.env.GROQ_API_KEYS);
   const reviewer = keys.length ? llmReviewer({ endpoints: groqEndpoints(keys), pastAmounts: vaultPastAmounts(chainClient as never, sender) }) : noReview;
-  const all: BillCard[] = await Promise.all(bills.slice(0, 10).sort((a, b) => a.dueDate - b.dueDate).map(async (b) => {
+  const all = await Promise.all(bills.slice(0, 10).sort((a, b) => a.dueDate - b.dueDate).map(async (b): Promise<{ card: BillCard; status: BillStatus }> => {
     const base = { digest: b.digest, payee: payee.name, invoiceRef: b.invoiceRef.slice(0, 64), currency: b.currency.slice(0, 8), amount: b.amount.toString(), dueDate: b.dueDate };
-    if ((await payoutStatus(b.digest)) !== 0) return { ...base, payable: false, reason: "already-paid" };
+    const status = BILL_STATUS[await payoutStatus(b.digest)] ?? "unpaid";
+    if (status !== "unpaid") return { status, card: { ...base, payable: false, reason: "already-paid" } };
+    // Hidden unpaid bills still get the check, so a bill signed for another vault isn't counted, but skip the AI review.
     const d = decide(b, await checkBill(b, payee), payee.biller, view);
-    if (!d.pay) return { ...base, payable: false, reason: d.reason };
+    if (!d.pay) return { status, card: { ...base, payable: false, reason: d.reason } };
+    if (!shows(filter, status)) return { status, card: { ...base, payable: true } };
     const v = await reviewBill(reviewer, b);
-    return { ...base, payable: true, ...(v.hold ? { aiNote: v.reason } : {}) };
+    return { status, card: { ...base, payable: true, ...(v.hold ? { aiNote: v.reason } : {}) } };
   }));
   // A digest mismatch means the bill was signed for another vault (such as v1): this vault can never pay it.
-  const cards = all.filter((c) => c.reason !== "digest-mismatch");
+  const real = all.filter((x) => x.card.reason !== "digest-mismatch");
+  const shown = real.filter((x) => shows(filter, x.status));
+  const hidden: Partial<Record<BillStatus, number>> = {};
+  for (const x of real) if (!shows(filter, x.status)) hidden[x.status] = (hidden[x.status] ?? 0) + 1;
   // Payee-written text (invoiceRef, note) stays out of what the model reads.
   const model = {
     payee: payee.name,
-    openBills: cards.map((c) => ({
-      amountUsdt: usdt(BigInt(c.amount)), localCurrency: c.currency, due: iso(c.dueDate), payable: c.payable,
-      ...(c.reason ? { why: reason(c.reason) } : {}), ...(c.aiNote ? { aiReviewNote: c.aiNote } : {}),
+    showing: filter,
+    bills: shown.map(({ card: c, status }) => ({
+      status, amountUsdt: usdt(BigInt(c.amount)), localCurrency: c.currency, due: iso(c.dueDate),
+      ...(status === "unpaid" ? { payable: c.payable } : {}),
+      ...(status === "unpaid" && c.reason ? { why: reason(c.reason) } : {}), ...(c.aiNote ? { aiReviewNote: c.aiNote } : {}),
     })),
+    // Counts only, so the model can mention them without listing them.
+    notShown: hidden,
   };
-  return { model, cards };
+  return { model, cards: shown.map((x) => x.card) };
 }
 
 const TOOLS: ToolSpec[] = [
@@ -160,10 +176,16 @@ const TOOLS: ToolSpec[] = [
     type: "function",
     function: {
       name: "check_bills",
-      description: "Open bills for one payee from the Arkiv inbox, each checked against ENS, the biller's signature and the vault's caps. Payable bills appear to the sender as cards with a Pay button.",
+      description: "Bills for one payee from the Arkiv inbox that are not past their due date, filtered by the vault's payout status. Unpaid bills are checked against ENS, the biller's signature and the vault's caps. Every bill returned appears to the sender as a card; payable ones have a Pay button.",
       parameters: {
         type: "object",
-        properties: { payee: { type: "string", description: "Exact payee name from vault_overview, for example school-fees.gharfam.eth" } },
+        properties: {
+          payee: { type: "string", description: "Exact payee name from vault_overview, for example school-fees.gharfam.eth" },
+          status: {
+            type: "string", enum: ["unpaid", "paid", "refunded", "all"],
+            description: "unpaid (default): open bills still to pay. paid: paid from the vault, including ones the provider is still paying out. refunded: paid out failed and the USDT went back. all: every bill.",
+          },
+        },
         required: ["payee"],
         additionalProperties: false,
       },
@@ -223,6 +245,8 @@ How Kin works: a licensed payout provider verifies each payee and writes the pay
 Facts:
 - Every balance, amount, date and name you state must come from a tool result in this turn. Never guess. Earlier turns may be out of date, so call the tools again.
 - Call vault_overview first to learn the payee names, then check_bills with an exact name. Match loose words to the list: "university fees" or "college" means a university or school-fees payee. If several fit, ask which one.
+- Pick check_bills' status from the question: open, due, unpaid or "what do I owe" means unpaid (the default); paid, past payments or history means paid; refunded means refunded; all, total or every bill means all. Ask once if it is unclear.
+- Each bill has a status: unpaid, paying-out (paid from the vault, which still holds the USDT until the provider finishes paying the family), paid, or refunded. Call a bill open only if its status is unpaid. If notShown has counts, you may mention them in one short line, for example "3 more are already paid".
 - If the payee the sender means isn't in the vault, still call check_bills with its bill type (for example "university"). Its verifiedInEns field tells you whether the sender can add it now with propose_add_payee (ask for caps), or the provider must onboard it first.
 
 Payments:
@@ -324,7 +348,8 @@ export async function runTurn(o: TurnInput, emit: (e: ChatEvent) => void): Promi
       try {
         if (call.function.name === "vault_overview") result = await vaultOverview(o.sender, o.known);
         else if (call.function.name === "check_bills" && typeof args.payee === "string") {
-          const { model, cards } = await checkBills(o.sender, args.payee, o.known);
+          const filter = ["unpaid", "paid", "refunded", "all"].includes(String(args.status)) ? (args.status as BillFilter) : "unpaid";
+          const { model, cards } = await checkBills(o.sender, args.payee, o.known, filter);
           for (const c of cards) turn.bills = [...turn.bills.filter((b) => b.digest !== c.digest), c];
           if (cards.length) emit({ t: "bills", bills: turn.bills });
           result = model;

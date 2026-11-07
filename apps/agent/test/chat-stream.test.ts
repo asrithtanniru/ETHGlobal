@@ -27,3 +27,15 @@ test("falls back to the next key only before anything streamed", async () => {
   assert.equal(out.content, "ok");
   assert.equal(n, 2);
 });
+
+test("waits out a short retry-after once on the same key, then moves on", async () => {
+  const keys: string[] = [];
+  const fetchFn = (async (_: string, init: RequestInit) => {
+    keys.push(String((init.headers as Record<string, string>).authorization));
+    return keys.length <= 2 ? new Response("slow down", { status: 429, headers: { "retry-after": "0.01" } }) : sse([ev({ content: "ok" })]);
+  }) as unknown as typeof fetch;
+  const out = await chatStream(groqEndpoints(["a", "b"]), [], [], () => {}, undefined, fetchFn);
+  assert.equal(out.content, "ok");
+  // Key a: first try, one retry after the wait; then key b.
+  assert.deepEqual(keys, ["Bearer a", "Bearer a", "Bearer b"]);
+});
