@@ -120,6 +120,27 @@ npm run read-bills -w @ghar/arkiv -- rent
 | Arkiv Rabdi RPC | `https://rpc.rabdi.db-chain.testnet.arkiv.network` |
 | ENSv2 Sepolia deployment | https://docs.ens.domains/learn/deployments |
 
+## Why onchain stablecoin settlement
+
+The sender, the payee and the payout provider don't trust each other, and they are in different countries. Settling USDT on Whitechain lets a contract, not a company, hold the money: it enforces the sender's caps, releases funds to the provider only through `markPaid`, and lets the sender recover them with `refund` or `reclaim`. A bank or an app database can't give all three parties that guarantee.
+
+## Limitations
+
+- **Testnets only.** Everything runs on Whitechain Sepolia, Ethereum Sepolia, Base Sepolia, Arkiv Rabdi and Transak staging. No real money moves.
+- **Transak needs a confirmation per order.** The regular off-ramp has the payee confirm each payout in its widget, with a test card on staging. Transak Stream could remove that step, but partner access, third-party deposits and staging support are unconfirmed.
+- **Transak staging sells Sepolia ETH, not USDT.** The provider sells just enough test ETH to deliver the bill amount, and there is a staging minimum of about $6.40 delivered.
+- **Transak doesn't cover India.** INR goes through P2P.me to a UPI ID. It is peer-to-peer, not a licensed provider, with limits of $100 per order and $1,000 per day before KYC. No INR payout has completed yet: the provider's test USDC float is empty.
+- **INR vault bills need a claim page.** Only Pay with Direct sends collect a UPI ID today.
+- **`payoutRef` doesn't route money yet.** It is a provider reference. A production provider would map it to the verified account.
+- **The web server holds demo keys.** The provider, relayer and agent keys sit in the app's environment for the demo. In production the provider runs on its own infrastructure.
+- **The provider page has no login,** and anyone with a pending bill's digest can open its widget on staging.
+- **One server instance with a disk.** Payout journals and claims are local files, so the app can't run on serverless hosting yet.
+
+## How AI was used
+
+- **Building:** we used Claude Code to help write and review code, tests and documentation, and to research sponsor docs. We directed the work, chose the design and ran the demos ourselves.
+- **In the product:** Groq-hosted `qwen/qwen3.8-27b` powers the chat assistant and the agent's bill review. It can only read data and propose actions. The sender approves every chat payment, and the vault enforces the caps either way.
+
 ## License
 
 MIT
