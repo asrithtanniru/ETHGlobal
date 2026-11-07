@@ -26,10 +26,11 @@ const NAV = [
 const ROLES = [
   ["Onboard a payee", "/app/onboard", Icon.signed],
   ["Raise a bill", "/app/raise-bill", Icon.receipt],
+  ["Pay out bills", "/app/provider", Icon.bank],
 ] as const;
 
 /** Public reads a family member can use without a wallet; every other screen sits behind the sign-in. */
-const OPEN_PATHS = ["/app/bills", "/app/activity"];
+const OPEN_PATHS = ["/app/bills", "/app/activity", "/app/provider"];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [qc] = useState(() => new QueryClient());

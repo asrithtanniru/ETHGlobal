@@ -6,7 +6,8 @@ import { erc20Abi, type Address, type Hex } from "viem";
 import { namehash } from "viem/ens";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useReadContract, useSignMessage } from "wagmi";
-import { Icon } from "../ui";
+import { Coin, Icon } from "../ui";
+import { TransakOrder } from "./TransakOrder";
 import { TxStatus } from "./AppShell";
 import { useTx, type TxState } from "./useTx";
 import { depositWithoutGas, gaslessMin, useGasless } from "./gasless";
@@ -323,7 +324,7 @@ export function Bill({ bill, address, ensure }: { bill: BillCard; address: Addre
   return (
     <section className="bill" aria-label={`Bill for ${amount} USDT`}>
       <div className="bill__top">
-        <p className="bill__amt">{amount}<small>USDT</small></p>
+        <p className="bill__amt">{amount}<small><Coin c="USDT" />USDT</small></p>
         <span className={`tag-pill${status ? " tag-pill--on" : ""}`}>{status ? ["", "pending", "paid", "refunded"][status] : `due ${due}`}</span>
       </div>
       <p className="bill__meta mono">{bill.payee} · {bill.invoiceRef} · {bill.currency}</p>
@@ -336,10 +337,14 @@ export function Bill({ bill, address, ensure }: { bill: BillCard; address: Addre
         </ul>
       )}
       {status > 0 ? (
-        <p className="bill__state">
-          {STATUS[status]}
-          {receipt.data && <> <a className="link" href={`/receipt/${receipt.data.key}`}>Receipt <span aria-hidden="true">→</span></a></>}
-        </p>
+        <>
+          <p className="bill__state">
+            {STATUS[status]}
+            {receipt.data && <> <a className="link" href={`/receipt/${receipt.data.key}`}>Receipt <span aria-hidden="true">→</span></a></>}
+          </p>
+          {/* INR pays out through P2P.me, everything else through Transak. */}
+          {bill.currency !== "INR" && <TransakOrder digest={bill.digest} />}
+        </>
       ) : bill.payable ? (
         tx.phase !== "done" && <button className="btn" onClick={pay} disabled={busy}>{busy ? "Paying" : `Approve and pay ${amount} USDT`}</button>
       ) : (

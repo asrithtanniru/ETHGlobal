@@ -764,3 +764,9 @@ a.inline { color: var(--ink); text-decoration: underline; text-underline-offset:
 
 
 button.link { background: none; border: 0; padding: 0; cursor: pointer; }
+
+/* Currency marks sit on the text baseline and scale with the amount beside them. */
+.coin { display: inline-block; width: 1em; height: 1em; margin-right: 0.3em; vertical-align: -0.14em; border-radius: 50%; }
+.transak { margin-top: 0.6rem; font-size: 1.2rem; color: var(--ink-2); }
+.transak b { font-weight: 500; color: var(--ink); }
+.transak__open { display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem; margin-top: 0.8rem; }
