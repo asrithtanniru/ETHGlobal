@@ -1,7 +1,7 @@
 // P2P.me off-ramp for INR sends: the provider sells USDC from its Base float, and a P2P.me merchant
 // pays the friend's UPI ID. Flow: place SELL -> merchant accepts -> approve + hand over the encrypted
 // UPI ID (USDC is pulled into escrow here) -> merchant pays the UPI ID and completes the order.
-import { concat, createPublicClient, createWalletClient, erc20Abi, http, keccak256, toHex, type Hex } from "viem";
+import { concat, formatUnits, createPublicClient, createWalletClient, erc20Abi, http, keccak256, toHex, type Hex } from "viem";
 import { baseSepolia } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 import { createOrders, type Order } from "@p2pdotme/sdk/orders";
@@ -31,6 +31,13 @@ function make() {
 }
 const p2p = () => (client ??= make());
 
+/** Throws before anything is sent when the provider's USDC float can't cover `need` (the pull would cancel the order). */
+async function ensureFloat(need: bigint) {
+  const { account, publicClient } = p2p();
+  const have = await publicClient.readContract({ address: USDC, abi: erc20Abi, functionName: "balanceOf", args: [account.address] });
+  if (have < need) throw new Error(`The provider's P2P.me float on Base Sepolia holds ${formatUnits(have, 6)} USDC, and this payout needs ${formatUnits(need, 6)}. Top it up first.`);
+}
+
 /** The SDK returns Results; this unwraps them so failures throw like the rest of the payout steps. */
 type Res<T> = { match<A, B = A>(ok: (v: T) => A, err: (e: { message: string }) => B): PromiseLike<A | B> };
 const ok = <T>(r: Res<T>, what: string): Promise<T> =>
@@ -52,6 +59,7 @@ export async function placeSell(usdc: bigint, onSend: () => void): Promise<{ ord
     amount: usdc, fiatAmount: (usdc * price.sellPrice) / 1_000_000n,
   };
   // Over the sell limit or no merchant circle: refused here, before an order exists.
+  await ensureFloat(usdc);
   const tx = await ok(orders.placeOrder.prepare(params), "route order");
   await publicClient.call({ account, to: tx.to, data: tx.data });
   onSend();
@@ -62,17 +70,21 @@ export async function placeSell(usdc: bigint, onSend: () => void): Promise<{ ord
 
 export const getOrder = (orderId: bigint) => ok(p2p().orders.getOrder({ orderId }), "read order");
 
-/** Approves what the Diamond pulls (amount plus any small-order fee), then hands the merchant the UPI ID. */
-export async function deliverUpi(order: Order, sealedUpi: string): Promise<Hex> {
+/** Approves what the Diamond pulls (amount plus any small-order fee), then hands the merchant the UPI ID.
+ *  `onSend` runs after the float check and a dry run pass, right before the handover is broadcast. */
+export async function deliverUpi(order: Order, sealedUpi: string, onSend: () => void): Promise<Hex> {
   const { orders, account, publicClient, walletClient } = p2p();
   // Approving only the amount makes the pull revert, and the Diamond then cancels the order.
   if (order.actualUsdcAmount < order.usdcAmount) throw new Error(`P2P.me order ${order.orderId} reports a short pull amount`);
+  await ensureFloat(order.actualUsdcAmount);
   const allowance = await publicClient.readContract({ address: USDC, abi: erc20Abi, functionName: "allowance", args: [account.address, DIAMOND] });
   if (allowance < order.actualUsdcAmount)
     await ok(orders.approveUsdc.execute({ walletClient: walletClient as never, waitForReceipt: true, amount: order.actualUsdcAmount }), "approve");
   const upi = await ok(orders.decryptPaymentAddress({ encrypted: sealedUpi }), "unseal");
-  const sent = await ok(orders.setSellOrderUpiWithFiat.execute({
-    walletClient: walletClient as never, waitForReceipt: true, orderId: order.orderId, paymentAddress: upi, merchantPublicKey: order.pubkey, updatedFiatAmount: 0n,
-  }), "send UPI");
+  const params = { orderId: order.orderId, paymentAddress: upi, merchantPublicKey: order.pubkey, updatedFiatAmount: 0n };
+  const tx = await ok(orders.setSellOrderUpiWithFiat.prepare(params), "prepare UPI");
+  await publicClient.call({ account, to: tx.to, data: tx.data });
+  onSend();
+  const sent = await ok(orders.setSellOrderUpiWithFiat.execute({ walletClient: walletClient as never, waitForReceipt: true, ...params }), "send UPI");
   return sent.hash;
 }

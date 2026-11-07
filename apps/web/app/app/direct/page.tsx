@@ -6,6 +6,7 @@ import { namehash } from "viem/ens";
 import { useQuery } from "@tanstack/react-query";
 import { useSignMessage } from "wagmi";
 import { getVerifiedPayee } from "@ghar/ens";
+import { Coin } from "@/components/ui";
 import { PageHead, RequireWallet, TxStatus } from "@/components/app/AppShell";
 import { useChatSession } from "@/components/app/chatSession";
 import { useTx, type TxState } from "@/components/app/useTx";
@@ -61,7 +62,7 @@ function Direct({ address }: { address: Address }) {
           <li>For INR, your friend just enters their UPI ID instead, and a P2P.me merchant pays it.</li>
           <li>Transak or the P2P.me merchant pays them. Only then does the vault release the USDT to the provider. A failed order refunds it to your vault, and an untouched one can be reclaimed after a day.</li>
         </ol>
-        <p className="card__p">Testnet: Transak staging pays from the provider&apos;s Sepolia ETH float at its test price, so the fiat amount differs from the USDT.</p>
+        <p className="card__p">Testnet: Transak staging pays from the provider&apos;s Sepolia ETH float. Each order sells just enough at Transak&apos;s test price for your friend to receive the USDT amount in USD, after Transak&apos;s fees. Staging won&apos;t sell less than about $6 after fees.</p>
       </aside>
     </div>
   );
@@ -147,7 +148,7 @@ function SendForm({ address, ready, enabled, header, ensure, onDone }: { address
           <span className="hint">Up to {usdt(most)} USDT now, from your vault</span>
         </div>
         <div className="field">
-          <label htmlFor="d-cur">They receive</label>
+          <label htmlFor="d-cur"><Coin c={currency} />They receive</label>
           <select id="d-cur" value={currency} onChange={(e) => setCurrency(e.target.value as Currency)}>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</select>
         </div>
       </div>
@@ -192,7 +193,7 @@ function Sends({ header, clear }: { header: string; clear: () => void }) {
       {list.data?.map((s) => (
         <div className="list-row" key={s.digest}>
           <div>
-            <div className="title">{s.amountUsdt} USDT → {s.currency}</div>
+            <div className="title">{s.amountUsdt} <Coin c="USDT" />USDT → <Coin c={s.currency} />{s.currency}</div>
             <div className="mono" style={{ marginTop: "0.4rem" }}>{s.email} · {when(Math.floor(s.at / 1000))}</div>
           </div>
           <div className="body-l"><span className={`tag-pill${s.status === "pending" ? "" : " tag-pill--on"}`}>{STATUS_TEXT[s.status]}</span></div>

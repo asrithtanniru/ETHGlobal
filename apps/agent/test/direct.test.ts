@@ -6,10 +6,21 @@ const to = "0x1111111111111111111111111111111111111111";
 const awaiting = { id: "o1", status: "AWAITING_PAYMENT_FROM_USER", cryptoAmount: 0.02, cryptoPaymentData: { paymentAddress: to } };
 
 test("sends the deposit only when Transak asks for it, to a real address, for the agreed amount", () => {
-  assert.deepEqual(nextStep(awaiting, [], "0.02"), { kind: "send", to });
+  assert.deepEqual(nextStep(awaiting, [], "0.02"), { kind: "send", to, eth: "0.02" });
   assert.equal(nextStep({ ...awaiting, cryptoAmount: 0.5 }, [], "0.02").kind, "amount-mismatch");
   assert.equal(nextStep({ ...awaiting, cryptoPaymentData: { paymentAddress: "not-an-address" } }, [], "0.02").kind, "processing");
   assert.equal(nextStep({ ...awaiting, status: "PROCESSING" }, [], "0.02").kind, "processing");
+});
+
+test("sends the amount a widget for this payout offered, sized from the bill", () => {
+  const opened = (eth: string): DepositEntry => ({ orderId: "o", phase: "opened", eth });
+  const order = { ...awaiting, cryptoAmount: 0.006313 };
+  assert.deepEqual(nextStep(order, [opened("0.006313")], "0.02"), { kind: "send", to, eth: "0.006313" });
+  // A reopened widget quoted a newer price: either offer is fine, anything else is not.
+  assert.deepEqual(nextStep(order, [opened("0.0064"), opened("0.006313")], "0.02"), { kind: "send", to, eth: "0.006313" });
+  assert.equal(nextStep(order, [opened("0.0064")], "0.02").kind, "amount-mismatch");
+  // The old fixed amount no longer counts once a payout has sized offers.
+  assert.equal(nextStep({ ...awaiting }, [opened("0.006313")], "0.02").kind, "amount-mismatch");
 });
 
 test("never sends a deposit twice, even after a crash between intent and send", () => {

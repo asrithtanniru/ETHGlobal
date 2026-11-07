@@ -24,7 +24,7 @@ export interface DirectConfig {
   journal: string;
   /** Deposit journal, shared by every process that runs payouts, so a deposit is never sent twice. */
   depositJournal: string;
-  /** Staging sells this much Sepolia ETH per order (provider float), not USDT. */
+  /** ETH per order for orders opened before orders were sized per bill (they carry no "opened" line). */
   sellEth: string;
   email?: string;
 }
@@ -68,8 +68,10 @@ export interface Progress {
 
 export type DepositEntry = {
   orderId: string;
-  phase: "intent" | "sent" | "place-intent" | "placed" | "upi-intent" | "upi-sent";
+  phase: "opened" | "intent" | "sent" | "place-intent" | "placed" | "upi-intent" | "upi-sent";
   hash?: Hex;
+  /** Sepolia ETH a Transak widget offered to sell for this payout. */
+  eth?: string;
   to?: Address;
   /** P2P.me's own order id, and the friend's UPI ID sealed to the provider's relay key. */
   p2pOrderId?: string;
@@ -135,10 +137,13 @@ export function directPayouts(cfg: DirectConfig) {
     if (!r.check.ok) throw new Error(`Review failed: ${r.check.reason}. Refund it instead.`);
     const orderId = orderIdFor(digest);
     if (viaP2p(r.bill)) return { orderId, widgetUrl: undefined, payoutRef: r.check.payoutRef, amountUsdt: r.amountUsdt, ...(await startP2p(orderId, r, opts.upi)) };
+    // Staging sells Sepolia ETH from the provider's float, sized so the payee receives the bill's USDT amount in USD.
+    const quote = (await transak.ethFor(Number(r.amountUsdt))) as { eth: string; receives: number; fee: number };
+    note({ orderId, phase: "opened", eth: quote.eth });
     const widgetUrl = (await transak.createSellWidget({
-      partnerOrderId: orderId, cryptoAmount: Number(cfg.sellEth), email: opts.email ?? cfg.email, fiatCurrency: opts.fiatCurrency, redirectURL: opts.redirectURL,
+      partnerOrderId: orderId, cryptoAmount: Number(quote.eth), email: opts.email ?? cfg.email, fiatCurrency: opts.fiatCurrency, redirectURL: opts.redirectURL,
     })) as string;
-    return { orderId, widgetUrl, payoutRef: r.check.payoutRef, amountUsdt: r.amountUsdt };
+    return { orderId, widgetUrl, payoutRef: r.check.payoutRef, amountUsdt: r.amountUsdt, eth: quote.eth, receivesUsd: quote.receives };
   }
 
   /** Places the one P2P.me SELL order for this payout; the friend's UPI ID waits sealed until a merchant accepts. */
@@ -167,8 +172,8 @@ export function directPayouts(cfg: DirectConfig) {
     if (step.kind === "refund") return finish(digest, { ok: false, reason: step.reason });
     const base = { orderId, orderStatus: order.status, depositTx: log.find((e) => e.phase === "upi-sent")?.hash ?? placed.hash };
     if (step.kind !== "deliver") return { stage: step.kind, ...base };
-    note({ orderId, phase: "upi-intent" });
-    const hash = await p2pme.deliverUpi(order, placed.upi!);
+    // The intent line goes in only after the float check and dry run pass, so a refused handover can be tried again.
+    const hash = await p2pme.deliverUpi(order, placed.upi!, () => note({ orderId, phase: "upi-intent" }));
     note({ orderId, phase: "upi-sent", hash });
     return { stage: "upi-sent", ...base, depositTx: hash };
   }
@@ -217,7 +222,7 @@ export function directPayouts(cfg: DirectConfig) {
     if (step.kind !== "send") return { stage: step.kind, orderId, orderStatus: order.status, depositTx: step.depositTx, reason: step.reason };
     const to = step.to;
     note({ orderId, phase: "intent", to });
-    const hash = (await transak.sendDeposit(to, cfg.sellEth)) as Hex;
+    const hash = (await transak.sendDeposit(to, step.eth)) as Hex;
     note({ orderId, phase: "sent", hash, to });
     return { stage: "deposit-sent", orderId, orderStatus: order.status, depositTx: hash };
   }
@@ -225,9 +230,31 @@ export function directPayouts(cfg: DirectConfig) {
   return { review, start, advance, finish };
 }
 
+/** Transak's own record of a payout's order, trimmed to what the app shows, and the deposit the provider sent for it. */
+export async function transakView(digest: Hex) {
+  const partnerOrderId = orderIdFor(digest);
+  const o = (await transak.getOrder(partnerOrderId)) as null | (Order & {
+    fiatAmount?: number; fiatCurrency?: string; totalFeeInFiat?: number; createdAt?: string; completedAt?: string;
+    cardDetails?: { last4?: string }; statusHistories?: { status: string; createdAt: string }[];
+  });
+  const sent = existsSync(DEPOSIT_JOURNAL)
+    ? readFileSync(DEPOSIT_JOURNAL, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as DepositEntry).find((e) => e.orderId === partnerOrderId && e.phase === "sent")
+    : undefined;
+  return {
+    partnerOrderId,
+    depositTx: sent?.hash,
+    // Only these fields leave the server: the order also holds the payee's email, IP and card issuer.
+    order: o && {
+      id: o.id, status: o.status, fiatAmount: o.fiatAmount, fiatCurrency: o.fiatCurrency, cryptoAmount: o.cryptoAmount, fee: o.totalFeeInFiat,
+      card: o.cardDetails?.last4, createdAt: o.createdAt, completedAt: o.completedAt,
+      history: (o.statusHistories ?? []).map((h) => ({ status: h.status, at: h.createdAt })),
+    },
+  };
+}
+
 type Order = { id: string; status: string; cryptoAmount?: number; cryptoPaymentData?: { paymentAddress?: string } };
 type Step =
-  | { kind: "paid" } | { kind: "refund"; reason: string } | { kind: "send"; to: Address }
+  | { kind: "paid" } | { kind: "refund"; reason: string } | { kind: "send"; to: Address; eth: string }
   | { kind: "deposit-sent" | "deposit-uncertain" | "processing" | "amount-mismatch"; depositTx?: Hex; reason?: string };
 
 /** What to do with an order, given the deposit journal. Pure, so the money rule is tested on its own. */
@@ -241,9 +268,12 @@ export function nextStep(order: Order, log: DepositEntry[], sellEth: string): St
   if (log.some((e) => e.phase === "intent")) return { kind: "deposit-uncertain", reason: "A deposit may already be on its way. Check the Sepolia wallet before doing anything." };
   const to = order.cryptoPaymentData?.paymentAddress;
   if (!to || !isAddress(to)) return { kind: "processing", reason: "Waiting for Transak's deposit address." };
-  if (order.cryptoAmount !== undefined && Number(order.cryptoAmount) !== Number(sellEth))
-    return { kind: "amount-mismatch", reason: `Transak asks for ${order.cryptoAmount} ETH, but this provider sells ${sellEth}.` };
-  return { kind: "send", to };
+  // Send only an amount a widget for this payout offered; a reopened widget may have quoted a newer price.
+  const offered = log.filter((e) => e.phase === "opened" && e.eth).map((e) => e.eth!);
+  const allowed = offered.length ? offered : [sellEth];
+  const eth = order.cryptoAmount === undefined ? allowed.at(-1)! : allowed.find((a) => Number(a) === Number(order.cryptoAmount));
+  if (!eth) return { kind: "amount-mismatch", reason: `Transak asks for ${order.cryptoAmount} ETH, but this payout offered ${allowed.join(" or ")}.` };
+  return { kind: "send", to, eth };
 }
 
 type P2pStep = { kind: "paid" } | { kind: "refund"; reason: string } | { kind: "deliver" }

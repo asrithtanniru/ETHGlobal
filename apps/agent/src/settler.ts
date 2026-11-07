@@ -55,7 +55,8 @@ async function settle(digest: Hex) {
     log("[Transak] error:", (e as Error).message.split("\n")[0]);
     return report(digest, await direct.finish(digest, { ok: false, reason: "provider error" }));
   }
-  log(`[Transak] order ${opened.orderId} for ${r.amountUsdt} USDT to ${opened.payoutRef}. Open within 5 minutes and confirm:\n  ${opened.widgetUrl}`);
+  const sized = "eth" in opened ? `, selling ${opened.eth} Sepolia ETH so the payee receives ${opened.receivesUsd} USD` : "";
+  log(`[Transak] order ${opened.orderId} for ${r.amountUsdt} USDT to ${opened.payoutRef}${sized}. Open within 5 minutes and confirm:\n  ${opened.widgetUrl}`);
   let last = "", deposit = "";
   const deadline = Date.now() + 30 * 60_000;
   while (Date.now() < deadline) {
