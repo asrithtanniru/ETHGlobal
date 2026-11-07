@@ -1,6 +1,6 @@
 # Whitechain feedback
 
-Notes from building Ghar on Whitechain Sepolia (chain 1874) at ETHGlobal Mumbai.
+Notes from building Kin on Whitechain Sepolia (chain 1874) at ETHGlobal Mumbai.
 
 ## What worked well
 

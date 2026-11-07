@@ -2,7 +2,7 @@ import Link from "next/link";
 import { GHAR_VAULT } from "@ghar/shared";
 import type { ReactNode, SVGProps } from "react";
 
-export const REPO = "https://github.com/asrithtanniru/ETHGlobal";
+export const REPO = "https://github.com/asrithtanniru/Kin";
 export const DOCS = `${REPO}#readme`;
 export const VAULT_EXPLORER = `https://explorer.testnet.whitechain.io/address/${GHAR_VAULT}`;
 

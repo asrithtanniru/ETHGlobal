@@ -1,6 +1,6 @@
 # Arkiv schema
 
-Ghar keeps two entity types on Rabdi (chain 7794095). Both are created `readonly`, so their values can't be edited after posting. All attributes are public, so no names or account numbers go on Arkiv.
+Kin keeps two entity types on Rabdi (chain 7794095). Both are created `readonly`, so their values can't be edited after posting. All attributes are public, so no names or account numbers go on Arkiv.
 
 ## Flow
 
@@ -8,7 +8,7 @@ Ghar keeps two entity types on Rabdi (chain 7794095). Both are created `readonly
 flowchart LR
   Biller["Payee's biller wallet"] -->|"signs EIP-712, posts"| Bill["GharBill"]
   Scammer["Any other wallet"] -->|"posts"| Fake["Fake GharBill"]
-  ENS["ENS on Sepolia: ghar.biller, ghar.payoutRef"] -->|"who may bill"| Agent["Ghar agent"]
+  ENS["ENS on Sepolia: ghar.biller, ghar.payoutRef"] -->|"who may bill"| Agent["Kin agent"]
   Bill -->|"createdBy(biller)"| Agent
   Fake -.->|"never returned; shown as ignored in the app"| Agent
   Agent -->|"pay(sender, bill, signature)"| Vault["GharVault on Whitechain"]

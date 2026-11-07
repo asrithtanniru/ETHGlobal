@@ -1,8 +1,10 @@
-# Ghar
+# Kin
+
+Kin was built under the working name Ghar, so packages and contracts keep that name (`@ghar/*`, `GharVault`).
 
 Pay your family's bills back home from stablecoins, only to accounts a licensed provider verified.
 
-People working abroad are often paid in USDT or USDC, while the bills they cover at home (rent, school fees, clinic visits) are owed in local currency to bank accounts. Ghar lets a sender fund a vault once, set spending caps, and have an AI agent pay incoming bills, with three guarantees enforced onchain rather than by our servers:
+People working abroad are often paid in USDT or USDC, while the bills they cover at home (rent, school fees, clinic visits) are owed in local currency to bank accounts. Kin lets a sender fund a vault once, set spending caps, and have an AI agent pay incoming bills, with three guarantees enforced onchain rather than by our servers:
 
 - Money only goes to payee accounts a licensed payout provider has verified. A message saying "we changed our account, pay here" cannot redirect funds.
 - Only bills signed by the payee's registered biller wallet are paid, and each bill expires after its due date so it cannot be paid twice.
@@ -10,7 +12,7 @@ People working abroad are often paid in USDT or USDC, while the bills they cover
 
 ## How it works
 
-1. The sender deposits USDT into the Ghar vault, sets caps and names a nominee.
+1. The sender deposits USDT into the Kin vault, sets caps and names a nominee.
 2. Payees post bills to the Arkiv inbox from their own wallet.
 3. The agent reads open bills for each payee.
 4. The agent checks the payee's ENS name: the bill's creator must match the `biller` record, and the `payout` record must be set by the provider.
@@ -25,12 +27,12 @@ People working abroad are often paid in USDT or USDC, while the bills they cover
 | Whitechain vault | Holds USDT, enforces agent grants, payee caps and the nominee timer | Whitechain Sepolia (1874) |
 | ENSv2 payee book | One subname per payee; only the provider's verifier can write `payout` and `biller` | Ethereum Sepolia |
 | Arkiv inbox | Signed bills that expire after the due date, and receipts the family can read | Arkiv Rabdi (7794095) |
-| Ghar agent | Reads bills, checks payees and calls the vault within its grant (`apps/agent`) | Off-chain service |
+| Kin agent | Reads bills, checks payees and calls the vault within its grant (`apps/agent`) | Off-chain service |
 | Settler | Runs the provider payout, settles on the vault and writes the receipt (`apps/agent`) | Off-chain service |
 | Chat assistant | Ask in plain words ("pay my university fees"); Groq reads the vault, ENS and Arkiv, shows each payable bill as a card, and the sender approves it with a wallet signature. History is stored encrypted on Arkiv | Groq + Arkiv Rabdi |
 | Merchant widget | `<script src=".../widget.js">` plus `<ghar-invoice>` (customer) and `<ghar-merchant>` (merchant: totals, refunds, receipts, CSV export) on any site, with `ghar:status` events. Demo: `examples/merchant-demo` (`npm run demo:merchant`, port 4000) | Any web page |
 | Pay with Direct | Send money from your vault to a friend: they claim USD, EUR or GBP to their card or bank through Transak via a secret link tied to their email; the vault releases the USDT only after Transak pays (`/app/direct`, `/claim/…`) | Whitechain + Transak staging |
-| Gasless deposits | The sender signs an EIP-3009 `ReceiveWithAuthorization`; Ghar's relayer calls `depositWithAuthorization` and pays the WBT | Whitechain Sepolia |
+| Gasless deposits | The sender signs an EIP-3009 `ReceiveWithAuthorization`; Kin's relayer calls `depositWithAuthorization` and pays the WBT | Whitechain Sepolia |
 | Web app | Landing page, chat, vault screens, bill inbox, pay links and public receipts (`apps/web`) | Next.js |
 
 ## Repository layout
@@ -105,7 +107,7 @@ npm run read-bills -w @ghar/arkiv -- rent
 | Step | Proof |
 | --- | --- |
 | v2 deployed with `depositWithAuthorization` | [`0x8ce0…1b49`](https://explorer.testnet.whitechain.io/tx/0x8ce055664ff5c5a2b90e8ad1f7748d62d4730076e8e80f663507db1ee54a1b49) |
-| Sender signed an EIP-3009 `ReceiveWithAuthorization` for 20 USDT; Ghar's relayer `0x5051…db65` submitted it | [`0xfd60…30ee`](https://explorer.testnet.whitechain.io/tx/0xfd600b8d473bcc01b3f2b6c9e3f0d5bf28549ae83474f583677797fb77ab30ee). The sender's WBT balance was unchanged before and after |
+| Sender signed an EIP-3009 `ReceiveWithAuthorization` for 20 USDT; Kin's relayer `0x5051…db65` submitted it | [`0xfd60…30ee`](https://explorer.testnet.whitechain.io/tx/0xfd600b8d473bcc01b3f2b6c9e3f0d5bf28549ae83474f583677797fb77ab30ee). The sender's WBT balance was unchanged before and after |
 | Second gasless deposit, 2 USDT: the relayer paid 0.00051 WBT (101,952 gas); the sender's WBT changed by 0 | [`0xb2fe…a5dd`](https://explorer.testnet.whitechain.io/tx/0xb2fe3900b5a8658111131a62cf3076b1d3d723871efa1f4211d4e508705aa5dd) |
 
 ## Networks and addresses
